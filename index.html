@@ -1558,7 +1558,7 @@ async function startCaptureExport(){
     stream=await navigator.mediaDevices.getDisplayMedia({
       preferCurrentTab:true,
       video:{width:1,height:1},
-      audio:{suppressLocalAudioPlayback:false,echoCancellation:false,noiseSuppression:false}
+      audio:true
     });
   }catch(e){
     if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
@@ -1566,6 +1566,14 @@ async function startCaptureExport(){
     return;
   }
   stream.getVideoTracks().forEach(t=>t.stop());
+
+  // 確認有音訊軌（使用者必須勾選「分享分頁音訊」）
+  if(!stream.getAudioTracks().length){
+    stream.getTracks().forEach(t=>t.stop());
+    if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
+    toast('❌ 沒有音訊軌！請重試並勾選「Share tab audio / 分享分頁音訊」');
+    return;
+  }
 
   const mime=['audio/webm;codecs=opus','audio/webm','audio/ogg'].find(t=>MediaRecorder.isTypeSupported(t))||'';
   const rec=new MediaRecorder(stream,mime?{mimeType:mime}:{});
@@ -1576,23 +1584,8 @@ async function startCaptureExport(){
   for(let i=0;i<items.length;i++){
     if(btn) btn.textContent=`第 ${i+1}/${items.length} 句...`;
     toast(`播放第 ${i+1}/${items.length} 句`);
-    // 使用 <audio> 元素播放 — 其輸出走標籤頁音訊管線，能被 getDisplayMedia 錄到
-    await new Promise(res=>{
-      const el=new Audio();
-      el.src=`https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(items[i].text)}&tl=en&client=tw-ob`;
-      el.playbackRate=rate;
-      const tid=setTimeout(()=>{ el.pause(); res(); },30000);
-      el.onended=()=>{ clearTimeout(tid); ok++; res(); };
-      el.onerror=()=>{
-        // Google TTS 失敗 → 退回 Web Speech API（不會被錄到，但不卡住流程）
-        clearTimeout(tid);
-        const u=new SpeechSynthesisUtterance(items[i].text);
-        u.rate=rate; u.lang='en-US';
-        u.onend=()=>{ ok++; res(); }; u.onerror=res;
-        speechSynthesis.cancel(); speechSynthesis.speak(u);
-      };
-      el.play().catch(()=>el.onerror());
-    });
+    const played=await _playForCapture(items[i].text);
+    if(played) ok++;
     if(i<items.length-1) await new Promise(r=>setTimeout(r,3000));
   }
 
@@ -1601,11 +1594,33 @@ async function startCaptureExport(){
   stream.getTracks().forEach(t=>t.stop());
   if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
 
-  if(!chunks.length){ toast('未錄到音訊，請確認有勾選「分享分頁音訊」'); return; }
+  if(ok===0){ toast('❌ 所有句子播放失敗，請確認網路連線'); return; }
+  if(!chunks.length){ toast('❌ 未錄到音訊，請確認勾選了「Share tab audio」'); return; }
+
   const blob=new Blob(chunks,{type:mime||'audio/webm'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='ESL練習音檔.webm'; a.click();
   toast(`匯出完成（${ok}/${items.length} 句，間隔 3 秒）`);
+}
+
+// 嘗試多個 Google TTS URL，不退回 speechSynthesis（speechSynthesis 不被 getDisplayMedia 錄到）
+async function _playForCapture(text){
+  const urls=[
+    `https://translate.googleapis.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en-US&client=gtx&sl=en`,
+    `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en&client=tw-ob`,
+  ];
+  for(const url of urls){
+    const ok=await new Promise(res=>{
+      const el=new Audio(url); el.playbackRate=rate;
+      const tid=setTimeout(()=>{ el.pause(); res(false); },45000);
+      el.onended=()=>{ clearTimeout(tid); res(true); };
+      el.onerror=()=>{ clearTimeout(tid); res(false); };
+      el.play().catch(()=>{ clearTimeout(tid); res(false); });
+    });
+    if(ok) return true;
+  }
+  console.warn('[capture] TTS failed:',text);
+  return false;
 }
 
 function encodeWAV(buf){
