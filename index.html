@@ -292,7 +292,8 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
     <div class="panel-ft">
       <button class="btn btn-ghost btn-sm" onclick="playAll()">▶ 全部播放</button>
       <button class="btn btn-ghost btn-sm" onclick="clearDone()">清除已完成</button>
-      <button class="btn btn-ghost btn-sm" onclick="exportTSV()">匯出</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportTSV()">匯出清單</button>
+      <button class="btn btn-ghost btn-sm" id="exportAudioBtn" onclick="exportAudio()">🎵 匯出音檔</button>
     </div>
   </div>
 </div>
@@ -1396,6 +1397,88 @@ function applyAuto(){
   });
   save(); renderDlg(); closeMo('autoMo');
   toast(`已套用 ${toApply.length} 個修正`);
+}
+
+// ── EXPORT AUDIO ──────────────────────────────────────────────────────────
+async function exportAudio(){
+  if(!D.practice.length){ toast('清單是空的'); return; }
+  const voice=document.getElementById('voiceSel').value;
+  const btn=document.getElementById('exportAudioBtn');
+  if(btn){ btn.disabled=true; btn.textContent='下載中...'; }
+
+  try{
+    const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    const decoded=[];
+
+    for(let i=0;i<D.practice.length;i++){
+      const item=D.practice[i];
+      toast(`下載音檔 ${i+1}/${D.practice.length}...`);
+      try{
+        const res=await fetch(`${TTS}?voice=${voice}&text=${encodeURIComponent(item.text)}`);
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const buf=await audioCtx.decodeAudioData(await res.arrayBuffer());
+        decoded.push(buf);
+      }catch(e){
+        console.warn('skip:',item.text,e);
+      }
+    }
+
+    if(!decoded.length){ toast('沒有成功下載的音檔'); return; }
+
+    const sr=decoded[0].sampleRate;
+    const gapLen=sr*3; // 3-second silence
+
+    // interleave: audio, silence, audio, silence, ..., audio
+    const segments=[];
+    decoded.forEach((buf,i)=>{
+      segments.push(buf);
+      if(i<decoded.length-1){
+        segments.push(audioCtx.createBuffer(1,gapLen,sr));
+      }
+    });
+
+    const totalLen=segments.reduce((s,b)=>s+b.length,0);
+    const merged=audioCtx.createBuffer(1,totalLen,sr);
+    const out=merged.getChannelData(0);
+    let off=0;
+    segments.forEach(seg=>{
+      out.set(seg.getChannelData(0),off);
+      off+=seg.length;
+    });
+
+    const blob=encodeWAV(merged);
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='ESL練習音檔.wav';
+    a.click();
+    audioCtx.close();
+    toast(`音檔匯出完成（${decoded.length} 句，間隔 3 秒）`);
+  }catch(e){
+    console.error(e);
+    toast('匯出失敗：'+e.message);
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
+  }
+}
+
+function encodeWAV(buf){
+  const ch=buf.numberOfChannels, sr=buf.sampleRate, n=buf.length;
+  const dataLen=n*ch*2;
+  const ab=new ArrayBuffer(44+dataLen);
+  const v=new DataView(ab);
+  const ws=(o,s)=>{ for(let i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
+  ws(0,'RIFF'); v.setUint32(4,36+dataLen,true);
+  ws(8,'WAVE'); ws(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true);
+  v.setUint16(22,ch,true); v.setUint32(24,sr,true);
+  v.setUint32(28,sr*ch*2,true); v.setUint16(32,ch*2,true);
+  v.setUint16(34,16,true); ws(36,'data'); v.setUint32(40,dataLen,true);
+  let o=44;
+  for(let i=0;i<n;i++) for(let c=0;c<ch;c++){
+    const s=Math.max(-1,Math.min(1,buf.getChannelData(c)[i]));
+    v.setInt16(o,s<0?s*32768:s*32767,true); o+=2;
+  }
+  return new Blob([ab],{type:'audio/wav'});
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
