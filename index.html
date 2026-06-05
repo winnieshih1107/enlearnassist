@@ -754,7 +754,8 @@ function renderDlg(){
         <button class="btn btn-ghost btn-sm" onclick="openCorrMo('${ex.id}')">✎ 手動修正</button>
         <button class="btn btn-ghost btn-sm" onclick="addExToPractice('${ex.id}')">＋ 加入練習</button>
         <button class="ibtn del btn-sm" onclick="delEx('${ex.id}')" title="刪除">✕</button>`
-      :`<button class="ibtn del btn-sm" onclick="delEx('${ex.id}')" title="刪除">✕</button>`;
+      :`<button class="btn btn-ghost btn-sm" onclick="addExToPractice('${ex.id}')">＋ 加入練習</button>
+        <button class="ibtn del btn-sm" onclick="delEx('${ex.id}')" title="刪除">✕</button>`;
 
     return `<div class="exchange" id="ex-${ex.id}">
       <div class="ex-role ${roleClass}">${esc(name)}</div>
