@@ -1495,14 +1495,24 @@ async function startCaptureExport(){
   for(let i=0;i<items.length;i++){
     if(btn) btn.textContent=`第 ${i+1}/${items.length} 句...`;
     toast(`播放第 ${i+1}/${items.length} 句`);
+    // 使用 <audio> 元素播放 — 其輸出走標籤頁音訊管線，能被 getDisplayMedia 錄到
     await new Promise(res=>{
-      speechSynthesis.cancel();
-      const u=new SpeechSynthesisUtterance(items[i].text);
-      u.rate=rate; u.lang='en-US';
-      u.onend=()=>{ ok++; if(i<items.length-1) setTimeout(res,3000); else res(); };
-      u.onerror=()=>res();
-      speechSynthesis.speak(u);
+      const el=new Audio();
+      el.src=`https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(items[i].text)}&tl=en&client=tw-ob`;
+      el.playbackRate=rate;
+      const tid=setTimeout(()=>{ el.pause(); res(); },30000);
+      el.onended=()=>{ clearTimeout(tid); ok++; res(); };
+      el.onerror=()=>{
+        // Google TTS 失敗 → 退回 Web Speech API（不會被錄到，但不卡住流程）
+        clearTimeout(tid);
+        const u=new SpeechSynthesisUtterance(items[i].text);
+        u.rate=rate; u.lang='en-US';
+        u.onend=()=>{ ok++; res(); }; u.onerror=res;
+        speechSynthesis.cancel(); speechSynthesis.speak(u);
+      };
+      el.play().catch(()=>el.onerror());
     });
+    if(i<items.length-1) await new Promise(r=>setTimeout(r,3000));
   }
 
   rec.stop();
