@@ -517,15 +517,21 @@ Winnie: Yes, my aunt. they control the cancer as well."></textarea>
 <!-- MODAL: Export Audio Guide -->
 <div class="modal-overlay" id="exportGuideMo">
   <div class="modal">
-    <div class="modal-title">🎵 匯出音檔（錄製模式）</div>
-    <div class="modal-sub">TTS 服務需要驗證，改用瀏覽器錄製標籤頁音訊</div>
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:13px 15px;font-size:.8rem;line-height:2;margin-bottom:14px">
-      點擊「開始錄製」後請依步驟操作：<br>
-      <strong>① 在彈出視窗選擇「分頁 / Tab」類型</strong><br>
-      <strong>② 選擇此分頁</strong><br>
-      <strong>③ 勾選「分享分頁音訊 / Share tab audio」</strong><br>
-      <strong>④ 點擊「分享 / Share」</strong><br>
-      完成後系統自動播放所有語句並錄製（每句間隔 3 秒）
+    <div class="modal-title">🎵 匯出音檔說明</div>
+    <div class="modal-sub">使用瀏覽器內建語音錄製，需授權分享音訊</div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:13px 15px;font-size:.82rem;line-height:1.9;margin-bottom:14px">
+      <strong>方法 A（推薦 · 整個畫面）：</strong><br>
+      &nbsp;① 選「<strong>整個畫面 / Entire Screen</strong>」<br>
+      &nbsp;② 勾選「<strong>共用系統音訊 / Share system audio</strong>」✅<br>
+      &nbsp;③ 點「<strong>分享 / Share</strong>」<br>
+      <br>
+      <strong>方法 B（分頁）：</strong><br>
+      &nbsp;① 點頂端「<strong>分頁 / Tab / Chrome Tab</strong>」標籤<br>
+      &nbsp;② 選擇此分頁<br>
+      &nbsp;③ 勾選「<strong>分享分頁音訊 / Share tab audio</strong>」✅<br>
+      &nbsp;④ 點「<strong>分享 / Share</strong>」<br>
+      <br>
+      <em style="color:var(--t3)">授權後自動播放全部句子（間隔 3 秒），完成後下載音檔</em>
     </div>
     <div class="f-actions">
       <button class="btn btn-ghost" onclick="closeMo('exportGuideMo')">取消</button>
@@ -1555,11 +1561,7 @@ async function startCaptureExport(){
 
   let stream;
   try{
-    stream=await navigator.mediaDevices.getDisplayMedia({
-      preferCurrentTab:true,
-      video:{width:1,height:1},
-      audio:true
-    });
+    stream=await navigator.mediaDevices.getDisplayMedia({video:{width:1,height:1},audio:true});
   }catch(e){
     if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
     toast(e.name==='NotAllowedError'?'已取消錄製':'授權失敗：'+e.message);
@@ -1567,11 +1569,10 @@ async function startCaptureExport(){
   }
   stream.getVideoTracks().forEach(t=>t.stop());
 
-  // 確認有音訊軌（使用者必須勾選「分享分頁音訊」）
   if(!stream.getAudioTracks().length){
     stream.getTracks().forEach(t=>t.stop());
     if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
-    toast('❌ 沒有音訊軌！請重試並勾選「Share tab audio / 分享分頁音訊」');
+    toast('❌ 沒有音訊！請按說明勾選「共用系統音訊」或「Share tab audio」後重試');
     return;
   }
 
@@ -1580,47 +1581,43 @@ async function startCaptureExport(){
   const chunks=[]; rec.ondataavailable=e=>{ if(e.data.size>0) chunks.push(e.data); };
   rec.start();
 
+  await new Promise(r=>setTimeout(r,600));
+
+  // 等語音列表載入
+  let voices=speechSynthesis.getVoices();
+  if(!voices.length) voices=await new Promise(res=>{
+    speechSynthesis.onvoiceschanged=()=>res(speechSynthesis.getVoices());
+    setTimeout(()=>res(speechSynthesis.getVoices()),1200);
+  });
+  const engVoice=voices.find(v=>v.lang==='en-US')||voices.find(v=>v.lang.startsWith('en'));
+
   let ok=0;
   for(let i=0;i<items.length;i++){
     if(btn) btn.textContent=`第 ${i+1}/${items.length} 句...`;
     toast(`播放第 ${i+1}/${items.length} 句`);
-    const played=await _playForCapture(items[i].text);
-    if(played) ok++;
+    await new Promise(res=>{
+      speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(items[i].text);
+      u.rate=rate; u.lang='en-US';
+      if(engVoice) u.voice=engVoice;
+      u.onend=()=>{ ok++; res(); };
+      u.onerror=()=>res();
+      speechSynthesis.speak(u);
+    });
     if(i<items.length-1) await new Promise(r=>setTimeout(r,3000));
   }
 
+  await new Promise(r=>setTimeout(r,600));
   rec.stop();
   await new Promise(r=>{ rec.onstop=r; });
   stream.getTracks().forEach(t=>t.stop());
   if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
 
-  if(ok===0){ toast('❌ 所有句子播放失敗，請確認網路連線'); return; }
-  if(!chunks.length){ toast('❌ 未錄到音訊，請確認勾選了「Share tab audio」'); return; }
-
+  if(!chunks.length){ toast('❌ 未錄到資料，請確認授權時已勾選音訊選項'); return; }
   const blob=new Blob(chunks,{type:mime||'audio/webm'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='ESL練習音檔.webm'; a.click();
   toast(`匯出完成（${ok}/${items.length} 句，間隔 3 秒）`);
-}
-
-// 嘗試多個 Google TTS URL，不退回 speechSynthesis（speechSynthesis 不被 getDisplayMedia 錄到）
-async function _playForCapture(text){
-  const urls=[
-    `https://translate.googleapis.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en-US&client=gtx&sl=en`,
-    `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en&client=tw-ob`,
-  ];
-  for(const url of urls){
-    const ok=await new Promise(res=>{
-      const el=new Audio(url); el.playbackRate=rate;
-      const tid=setTimeout(()=>{ el.pause(); res(false); },45000);
-      el.onended=()=>{ clearTimeout(tid); res(true); };
-      el.onerror=()=>{ clearTimeout(tid); res(false); };
-      el.play().catch(()=>{ clearTimeout(tid); res(false); });
-    });
-    if(ok) return true;
-  }
-  console.warn('[capture] TTS failed:',text);
-  return false;
 }
 
 function encodeWAV(buf){
