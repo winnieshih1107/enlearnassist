@@ -514,6 +514,26 @@ Winnie: Yes, my aunt. they control the cancer as well."></textarea>
   </div>
 </div>
 
+<!-- MODAL: Export Audio Guide -->
+<div class="modal-overlay" id="exportGuideMo">
+  <div class="modal">
+    <div class="modal-title">🎵 匯出音檔（錄製模式）</div>
+    <div class="modal-sub">TTS 服務需要驗證，改用瀏覽器錄製標籤頁音訊</div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:13px 15px;font-size:.8rem;line-height:2;margin-bottom:14px">
+      點擊「開始錄製」後請依步驟操作：<br>
+      <strong>① 在彈出視窗選擇「分頁 / Tab」類型</strong><br>
+      <strong>② 選擇此分頁</strong><br>
+      <strong>③ 勾選「分享分頁音訊 / Share tab audio」</strong><br>
+      <strong>④ 點擊「分享 / Share」</strong><br>
+      完成後系統自動播放所有語句並錄製（每句間隔 3 秒）
+    </div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="closeMo('exportGuideMo')">取消</button>
+      <button class="btn btn-primary" onclick="startCaptureExport()">開始錄製</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1040,7 +1060,7 @@ function confirmLineImport(){
 // ── MODAL ─────────────────────────────────────────────────────────────────
 function openMo(id){ document.getElementById(id).classList.add('open'); }
 function closeMo(id){ document.getElementById(id).classList.remove('open'); }
-['newLessonMo','addExMo','corrMo','importMo','autoMo','lineRoleMo','settingsMo','promptGenMo','htmlImportMo'].forEach(id=>{
+['newLessonMo','addExMo','corrMo','importMo','autoMo','lineRoleMo','settingsMo','promptGenMo','htmlImportMo','exportGuideMo'].forEach(id=>{
   document.getElementById(id).addEventListener('click',e=>{
     if(e.target===document.getElementById(id)) closeMo(id);
   });
@@ -1405,18 +1425,15 @@ async function exportAudio(){
   if(!items.length){ toast('清單是空的'); return; }
   const voice=document.getElementById('voiceSel').value;
   const btn=document.getElementById('exportAudioBtn');
-  if(btn){ btn.disabled=true; btn.textContent='下載中...'; }
+  if(btn){ btn.disabled=true; btn.textContent='嘗試中...'; }
   try{
-    // Method 1: fetch → decode → WAV（快速，需 API 支援 CORS）
     if(!await _exportFetch(items,voice,btn)){
-      // Method 2: 實時錄製 → WebM（自動備援）
-      if(btn) btn.textContent='錄製中...';
-      await _exportRecord(items,voice,btn);
+      if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
+      openMo('exportGuideMo'); // TTS API 不可用 → 引導錄製模式
     }
   }catch(e){
-    toast('匯出錯誤：'+e.message); console.error('[exportAudio]',e);
-  }finally{
     if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
+    toast('匯出失敗：'+e.message); console.error('[exportAudio]',e);
   }
 }
 
@@ -1429,11 +1446,11 @@ async function _exportFetch(items,voice,btn){
       const r=await fetch(`${TTS}?voice=${voice}&text=${encodeURIComponent(items[i].text)}`);
       if(!r.ok) throw new Error('HTTP '+r.status);
       const ab=await r.arrayBuffer();
-      if(!ab.byteLength) throw new Error('empty response');
+      if(!ab.byteLength) throw new Error('empty');
       bufs.push(await ctx.decodeAudioData(ab));
     }catch(e){
-      console.warn('[fetch]',e.name,e.message,items[i].text);
-      if(i===0){ ctx.close(); return false; } // 第一句就失敗 → 切換備援
+      console.warn('[fetch]',e.name,e.message);
+      if(i===0){ ctx.close(); return false; }
     }
     if(i<items.length-1) await new Promise(r=>setTimeout(r,200));
   }
@@ -1449,43 +1466,55 @@ async function _exportFetch(items,voice,btn){
   ctx.close(); toast(`匯出完成（${bufs.length} 句，WAV，間隔 3 秒）`); return true;
 }
 
-async function _exportRecord(items,voice,btn){
-  // 使用 Audio 元素 + crossOrigin + MediaRecorder 實時錄製
-  const ctx=new (window.AudioContext||window.webkitAudioContext)();
-  const dest=ctx.createMediaStreamDestination();
-  const mime=['audio/webm;codecs=opus','audio/webm','audio/ogg'].find(t=>MediaRecorder.isTypeSupported(t))||'';
-  const rec=new MediaRecorder(dest.stream,mime?{mimeType:mime}:{});
-  const chunks=[]; rec.ondataavailable=e=>{ if(e.data.size>0) chunks.push(e.data); };
-  rec.start(); let ok=0;
+async function startCaptureExport(){
+  const items=D.practice;
+  closeMo('exportGuideMo');
+  const btn=document.getElementById('exportAudioBtn');
+  if(btn){ btn.disabled=true; btn.textContent='等待授權...'; }
 
-  for(let i=0;i<items.length;i++){
-    if(btn) btn.textContent=`錄製 ${i+1}/${items.length}...`;
-    toast(`實時錄製第 ${i+1}/${items.length} 句`);
-    const played=await new Promise(res=>{
-      const el=new Audio(); el.crossOrigin='anonymous';
-      el.src=`${TTS}?voice=${voice}&text=${encodeURIComponent(items[i].text)}`;
-      el.playbackRate=rate;
-      let linked=false;
-      const link=()=>{
-        if(linked) return; linked=true;
-        try{ const s=ctx.createMediaElementSource(el); s.connect(dest); }
-        catch(e){ console.warn('[link]',e.message); }
-      };
-      const tid=setTimeout(()=>res(false),60000);
-      el.addEventListener('canplay',link,{once:true});
-      el.onended=()=>{ clearTimeout(tid); res(true); };
-      el.onerror=e=>{ clearTimeout(tid); console.warn('[audio-err]',e); res(false); };
-      el.play().catch(e=>{ clearTimeout(tid); console.warn('[play]',e); res(false); });
+  let stream;
+  try{
+    stream=await navigator.mediaDevices.getDisplayMedia({
+      preferCurrentTab:true,
+      video:{width:1,height:1},
+      audio:{suppressLocalAudioPlayback:false,echoCancellation:false,noiseSuppression:false}
     });
-    if(played){ ok++; if(i<items.length-1) await new Promise(r=>setTimeout(r,3000)); }
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
+    toast(e.name==='NotAllowedError'?'已取消錄製':'授權失敗：'+e.message);
+    return;
+  }
+  stream.getVideoTracks().forEach(t=>t.stop());
+
+  const mime=['audio/webm;codecs=opus','audio/webm','audio/ogg'].find(t=>MediaRecorder.isTypeSupported(t))||'';
+  const rec=new MediaRecorder(stream,mime?{mimeType:mime}:{});
+  const chunks=[]; rec.ondataavailable=e=>{ if(e.data.size>0) chunks.push(e.data); };
+  rec.start();
+
+  let ok=0;
+  for(let i=0;i<items.length;i++){
+    if(btn) btn.textContent=`第 ${i+1}/${items.length} 句...`;
+    toast(`播放第 ${i+1}/${items.length} 句`);
+    await new Promise(res=>{
+      speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(items[i].text);
+      u.rate=rate; u.lang='en-US';
+      u.onend=()=>{ ok++; if(i<items.length-1) setTimeout(res,3000); else res(); };
+      u.onerror=()=>res();
+      speechSynthesis.speak(u);
+    });
   }
 
-  rec.stop(); await new Promise(r=>{ rec.onstop=r; }); ctx.close();
-  if(!ok){ toast('錄製失敗，請開啟 F12 Console 查看錯誤原因'); return false; }
+  rec.stop();
+  await new Promise(r=>{ rec.onstop=r; });
+  stream.getTracks().forEach(t=>t.stop());
+  if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
+
+  if(!chunks.length){ toast('未錄到音訊，請確認有勾選「分享分頁音訊」'); return; }
   const blob=new Blob(chunks,{type:mime||'audio/webm'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='ESL練習音檔.webm'; a.click();
-  toast(`匯出完成（${ok}/${items.length} 句，WebM，間隔 3 秒）`); return true;
+  toast(`匯出完成（${ok}/${items.length} 句，間隔 3 秒）`);
 }
 
 function encodeWAV(buf){
