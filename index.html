@@ -1101,9 +1101,90 @@ function runHTMLImport(){
   toast(`已匯入「${l.title}」· ${stuCount} 句學生對話 · ${corrCount} 筆修正`);
 }
 
+// ── NEW FORMAT parser (.wrap / .ex / .t / .s / .err / .fix) ──────────────
+function parseNewFormat(wrap){
+  let studentName='Student', topic='匯入課堂';
+  for(const p of wrap.querySelectorAll('p')){
+    const t=p.textContent;
+    const sM=t.match(/Student\s*[:：]\s*(\S+)/i);
+    const tM=t.match(/Topic\s*[:：]\s*([^·•\n]+)/i);
+    if(sM) studentName=sM[1].trim();
+    if(tM) topic=tM[1].trim().replace(/\s*·.*$/,'').trim();
+    if(sM||tM) break;
+  }
+  const exchanges=[];
+  for(const el of wrap.children){
+    const tag=el.tagName; const cls=el.className||'';
+    if(tag==='HR'||tag==='H2'||tag==='P') continue;
+    if(/\blegend\b/.test(cls)||/\bvocab/.test(cls)) continue;
+    // Section header
+    if(/\bsec\b/.test(cls)){
+      const clone=el.cloneNode(true);
+      clone.querySelectorAll('.topic-badge').forEach(b=>b.remove());
+      const title=clone.textContent.trim();
+      if(title) exchanges.push({id:uid(),role:'section',title});
+      continue;
+    }
+    // Exchange block
+    if(/\bex\b/.test(cls)){
+      // Teacher
+      const tEl=el.querySelector(':scope>.t');
+      if(tEl){
+        const text=tEl.textContent.trim().replace(/^Teacher\s*[:：]\s*/i,'');
+        if(text) exchanges.push({id:uid(),role:'teacher',text,corrections:[]});
+      }
+      // Student
+      if(el.querySelector(':scope>.s')){
+        const lines=Array.from(el.querySelectorAll('p.line,.line'));
+        const fixPars=Array.from(el.querySelectorAll('p.fix,.fix')).filter(f=>!f.closest('.line,.err'));
+        const noteEl=el.querySelector('p.note,.note');
+        let origText=''; const corrections=[];
+        for(const line of lines){
+          // Reconstruct original: text nodes + .err content, skip .fix
+          let orig='';
+          for(const n of line.childNodes){
+            if(n.nodeType===3) orig+=n.textContent;
+            else if(n.nodeType===1&&/\berr\b/.test(n.className||'')) orig+=n.textContent;
+          }
+          orig=orig.replace(/\s+/g,' ').trim();
+          if(orig&&!origText) origText=orig;
+          // Inline .err → .fix pairs
+          const errS=Array.from(line.querySelectorAll('.err'));
+          const fixS=Array.from(line.querySelectorAll('.fix'));
+          if(errS.length&&fixS.length){
+            errS.forEach((e,i)=>{
+              const w=e.textContent.trim();
+              const c=(fixS[i]||fixS[0]).textContent.replace(/^[→✓\s]+/,'').trim();
+              if(w&&c) corrections.push({wrong:w,correct:c,note:''});
+            });
+          } else if(errS.length){
+            corrections.push({wrong:errS.map(e=>e.textContent.trim()).join(' '),correct:'',note:''});
+          }
+        }
+        // Standalone .fix fills empty correction
+        if(fixPars.length){
+          const fixText=fixPars.map(f=>f.textContent.trim()).join(' ');
+          const empty=corrections.find(c=>!c.correct);
+          if(empty) empty.correct=fixText;
+          else if(!corrections.length&&origText) corrections.push({wrong:origText,correct:fixText,note:''});
+        }
+        if(noteEl){ const note=noteEl.textContent.trim(); if(corrections.length) corrections[corrections.length-1].note=note; }
+        if(origText||corrections.length)
+          exchanges.push({id:uid(),role:'student',text:origText||(corrections[0]?.wrong)||'',corrections});
+      }
+    }
+  }
+  return{studentName,topic,exchanges};
+}
+
 function parseClaudeHTML(htmlStr){
   const parser=new DOMParser();
   const doc=parser.parseFromString(htmlStr,'text/html');
+
+  // Detect new format (.wrap/.ex/.t/.s/.err) vs old (.transcript-wrap/.exchange)
+  const wrapNew=doc.querySelector('.wrap');
+  const wrapOld=doc.querySelector('.transcript-wrap');
+  if(wrapNew&&!wrapOld) return parseNewFormat(wrapNew);
 
   // Find the transcript wrapper (try multiple selectors)
   const wrap=doc.querySelector('.transcript-wrap')||doc.body;
