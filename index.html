@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESL 課堂對話紀錄與修正</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f6f3;--surface:#fff;--surface2:#f0efec;
+  --border:#e4e2dc;--text:#1a1a1a;--muted:#888;
+  --accent:#5b6af0;--red:#d63031;--green:#27ae60;
+  --note-border:#d0cdc5;--radius:8px;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.6}
+
+/* ── HEADER ── */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-size:.95rem;font-weight:700}
+.header-right{display:flex;align-items:center;gap:8px}
+.lesson-sel{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.78rem;padding:5px 10px;cursor:pointer;max-width:220px}
+
+/* ── LAYOUT ── */
+.app{display:grid;grid-template-columns:1fr 360px;height:calc(100vh - 54px)}
+
+/* ── PANEL ── */
+.panel{display:flex;flex-direction:column;overflow:hidden}
+.panel-right{border-left:1px solid var(--border);background:var(--surface)}
+.panel-hd{padding:13px 22px 11px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.panel-title{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.panel-bd{flex:1;overflow-y:auto}
+.panel-bd::-webkit-scrollbar{width:4px}
+.panel-bd::-webkit-scrollbar-thumb{background:#ccc;border-radius:4px}
+.panel-ft{padding:11px 22px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0}
+
+/* ── LESSON META ── */
+.lesson-meta{padding:14px 24px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.lesson-topic{font-size:.85rem;font-weight:600;margin-bottom:2px}
+.lesson-date{font-size:.7rem;color:var(--muted)}
+
+/* ── LEGEND ── */
+.legend{padding:7px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;font-size:.72rem;background:#fafaf8;flex-shrink:0}
+.leg-wrong{color:var(--red);text-decoration:line-through;font-weight:500}
+.leg-correct{color:var(--green);font-weight:500}
+.leg-sep{color:var(--muted)}
+
+/* ── DIALOGUE ── */
+.dialogue{flex:1;overflow-y:auto;padding:20px 24px 8px}
+.dialogue::-webkit-scrollbar{width:4px}
+.dialogue::-webkit-scrollbar-thumb{background:#ccc;border-radius:4px}
+
+.exchange{margin-bottom:18px}
+
+.ex-section{text-align:center;margin:24px 0 16px}
+.ex-section-label{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:3px 14px;border:1px solid var(--border);border-radius:20px;background:var(--surface)}
+
+.ex-role{font-size:.72rem;font-weight:600;margin-bottom:4px;letter-spacing:.02em}
+.ex-role.teacher{color:var(--muted)}
+.ex-role.student{color:var(--accent)}
+
+.ex-body{position:relative}
+.ex-text{font-size:.85rem;line-height:1.7;color:var(--text)}
+.wrong-text{color:var(--red);text-decoration:line-through;font-weight:500}
+.correct-text{color:var(--green);font-weight:500;margin-left:4px}
+
+.ex-notes{margin-top:8px;display:flex;flex-direction:column;gap:5px}
+.ex-note{border-left:2px solid var(--note-border);padding:4px 10px;font-size:.75rem;color:#666;font-style:italic;line-height:1.5}
+
+.ex-actions{display:flex;gap:6px;margin-top:8px;opacity:0;transition:opacity .18s;flex-wrap:wrap}
+.exchange:hover .ex-actions{opacity:1}
+
+/* ── AUTO CORRECT ── */
+.btn-auto{background:#f0f4ff;border:1px solid #c5d0f7;color:#3a52c4}
+.btn-auto:hover{background:#e4ebff;border-color:#aabaf5}
+.btn-auto:disabled{opacity:.5;cursor:not-allowed}
+.auto-sugs{display:flex;flex-direction:column;gap:7px;margin-bottom:14px}
+.auto-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;cursor:pointer;transition:border-color .15s}
+.auto-card.sel{border-color:var(--green);background:rgba(39,174,96,.06)}
+.auto-card.no-rep{opacity:.6;cursor:default}
+.auto-card input[type=checkbox]{margin-top:3px;flex-shrink:0;accent-color:var(--green);width:15px;height:15px;cursor:pointer}
+.asc-body{flex:1;min-width:0}
+.asc-wrong{color:var(--red);text-decoration:line-through;font-size:.8rem;font-weight:500}
+.asc-correct{color:var(--green);font-size:.8rem;margin-top:2px;font-weight:500}
+.asc-note{color:var(--muted);font-size:.71rem;margin-top:4px;font-style:italic;line-height:1.4}
+.spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(58,82,196,.25);border-top-color:#3a52c4;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:3px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── EMPTY ── */
+.empty-dlg{text-align:center;padding:50px 20px;color:var(--muted);font-size:.82rem}
+.empty-dlg .ei{font-size:2.2rem;margin-bottom:10px}
+
+/* ── ADD BAR ── */
+.add-bar{padding:11px 24px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;background:var(--surface);flex-shrink:0}
+
+/* ── LINE ROLE ASSIGN ── */
+.lr-list{display:flex;flex-direction:column;gap:4px;max-height:52vh;overflow-y:auto;margin-bottom:14px}
+.lr-list::-webkit-scrollbar{width:4px}
+.lr-list::-webkit-scrollbar-thumb{background:#ccc;border-radius:4px}
+.lr-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);transition:border-color .12s,background .12s}
+.lr-row.lr-t{border-color:rgba(91,106,240,.35);background:rgba(91,106,240,.05)}
+.lr-row.lr-s{border-color:rgba(39,174,96,.35);background:rgba(39,174,96,.05)}
+.lr-row.lr-skip{opacity:.38}
+.lr-btns{display:flex;gap:3px;flex-shrink:0}
+.lrb{width:28px;height:22px;border-radius:4px;font-size:.68rem;font-weight:700;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .12s;font-family:inherit}
+.lrb.t.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.lrb.s.on{background:var(--green);border-color:var(--green);color:#fff}
+.lrb.sk.on{background:#aaa;border-color:#aaa;color:#fff}
+.lr-text{flex:1;font-size:.82rem;line-height:1.45;word-break:break-word}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;border:none;transition:opacity .15s,transform .1s;white-space:nowrap;font-family:inherit}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{opacity:.88}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.btn-ghost:hover{border-color:#aaa;color:var(--text);background:var(--surface2)}
+.btn-green{background:var(--green);color:#fff;font-weight:700}
+.btn-green:hover{opacity:.88}
+.btn-red{background:var(--red);color:#fff}
+.btn-red:hover{opacity:.88}
+.btn-sm{padding:4px 10px;font-size:.7rem}
+.btn-icon{width:26px;height:26px;padding:0;justify-content:center;font-size:12px}
+
+/* ── ICON BTN ── */
+.ibtn{width:26px;height:26px;border-radius:5px;background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .15s}
+.ibtn:hover{background:var(--surface2);color:var(--text)}
+.ibtn.play{color:var(--accent);border-color:rgba(91,106,240,.3)}
+.ibtn.play:hover{background:rgba(91,106,240,.1)}
+.ibtn.play.playing{background:rgba(91,106,240,.15);animation:pulse 1s infinite}
+.ibtn.del:hover{background:#fde8e8;color:var(--red);border-color:rgba(214,48,49,.3)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(91,106,240,.4)}50%{box-shadow:0 0 0 4px rgba(91,106,240,0)}}
+
+/* ── PRACTICE PANEL ── */
+.prac-body{padding:14px 18px}
+.voice-row,.speed-row{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.v-label{font-size:.7rem;color:var(--muted);white-space:nowrap;min-width:42px}
+.v-sel{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.73rem;padding:4px 8px;cursor:pointer;flex:1}
+.speed-chips{display:flex;gap:3px}
+.sp-chip{padding:3px 9px;border-radius:20px;font-size:.68rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .15s}
+.sp-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.divider{height:1px;background:var(--border);margin:12px 0}
+.prog-lbl{font-size:.7rem;color:var(--muted);display:flex;justify-content:space-between;margin-bottom:4px}
+.prog-wrap{background:var(--surface2);border-radius:4px;height:5px;margin-bottom:13px}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:4px;transition:width .4s}
+.ftabs{display:flex;gap:5px;margin-bottom:12px}
+.ftab{padding:3px 12px;border-radius:20px;font-size:.7rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .15s}
+.ftab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.todo-list{display:flex;flex-direction:column;gap:7px}
+.todo-item{display:flex;align-items:flex-start;gap:8px;padding:10px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;transition:opacity .2s}
+.todo-item.done{opacity:.45}
+.todo-item.done .todo-text{text-decoration:line-through}
+.t-check{width:18px;height:18px;min-width:18px;border-radius:50%;border:2px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;margin-top:2px;flex-shrink:0;transition:all .15s}
+.todo-item.done .t-check{background:var(--green);border-color:var(--green)}
+.t-check-icon{display:none;color:#fff;font-size:10px;font-weight:800}
+.todo-item.done .t-check-icon{display:block}
+.t-main{flex:1;min-width:0}
+.todo-text{font-size:.8rem;line-height:1.5;word-break:break-word}
+.todo-meta{font-size:.65rem;color:var(--muted);margin-top:2px}
+.t-acts{display:flex;gap:3px;flex-shrink:0}
+.empty-hint{text-align:center;color:var(--muted);font-size:.78rem;padding:22px 0}
+.manual-row{display:flex;gap:6px;margin-top:10px}
+.manual-input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.78rem;padding:6px 10px;transition:border-color .2s;font-family:inherit}
+.manual-input:focus{outline:none;border-color:var(--accent)}
+.manual-input::placeholder{color:#bbb}
+
+/* ── MODALS ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;width:520px;max-width:95vw;max-height:88vh;overflow-y:auto;transform:translateY(8px);transition:transform .2s;box-shadow:0 8px 30px rgba(0,0,0,.12)}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-title{font-size:.95rem;font-weight:700;margin-bottom:3px}
+.modal-sub{font-size:.74rem;color:var(--muted);margin-bottom:16px}
+.f-field{margin-bottom:13px}
+.f-label{font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;display:block}
+.f-input,.f-textarea,.f-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:.82rem;padding:8px 11px;transition:border-color .2s}
+.f-input:focus,.f-textarea:focus{outline:none;border-color:var(--accent)}
+.f-textarea{resize:vertical;min-height:72px}
+.f-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+
+/* ROLE TABS */
+.role-tabs{display:flex;gap:6px;margin-bottom:12px}
+.role-tab{padding:5px 14px;border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .15s}
+.role-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* CORRECTION CARDS */
+.corr-list{display:flex;flex-direction:column;gap:7px;margin-bottom:12px}
+.corr-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;display:flex;gap:10px;align-items:flex-start}
+.corr-card-body{flex:1;min-width:0}
+.corr-wrong{color:var(--red);text-decoration:line-through;font-size:.8rem}
+.corr-correct{color:var(--green);font-size:.8rem;margin-top:1px}
+.corr-note{color:var(--muted);font-size:.72rem;margin-top:3px;font-style:italic}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(8px);background:#333;color:#fff;border-radius:8px;padding:8px 18px;font-size:.78rem;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:999;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media(max-width:768px){.app{grid-template-columns:1fr;height:auto}.panel-right{border-left:none;border-top:1px solid var(--border)}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">📝 ESL 課堂對話紀錄與修正</div>
+  <div class="header-right">
+    <select class="lesson-sel" id="lessonSel" onchange="switchLesson(this.value)">
+      <option value="">— 選擇課堂 —</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" onclick="openNewLesson()">＋ 新增課堂</button>
+    <button class="btn btn-ghost btn-sm" onclick="openImport()">貼上逐字稿</button>
+    <button class="btn btn-primary btn-sm" onclick="openHTMLImport()">📥 Claude HTML 匯入</button>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- LEFT: DIALOGUE RECORD -->
+  <div class="panel">
+    <div class="lesson-meta">
+      <div class="lesson-topic" id="lessonTopic">尚未選擇課堂</div>
+      <div class="lesson-date" id="lessonDate">請從上方選擇或新增課堂</div>
+    </div>
+    <div class="legend">
+      <span class="leg-wrong">錯誤原文</span>
+      <span class="leg-sep">需修正</span>
+      <span class="leg-correct">✓ 正確用法</span>
+      <span class="leg-sep">修正後</span>
+    </div>
+    <div class="dialogue" id="dialogue">
+      <div class="empty-dlg"><div class="ei">📝</div>新增課堂後開始記錄對話</div>
+    </div>
+    <div class="add-bar" id="addBar" style="display:none">
+      <button class="btn btn-ghost btn-sm" onclick="openAddEx('teacher')">＋ Teacher</button>
+      <button class="btn btn-ghost btn-sm" onclick="openAddEx('student')">＋ Student</button>
+      <button class="btn btn-ghost btn-sm" onclick="openAddEx('section')">＋ 段落標題</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-auto btn-sm" id="batchAIBtn" onclick="batchAICorrect()">🤖 AI 批量修正</button>
+      <button class="btn btn-ghost btn-sm" onclick="openSettings()" title="設定 Claude API Key">⚙</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: PRACTICE -->
+  <div class="panel panel-right">
+    <div class="panel-hd">
+      <span class="panel-title">練習清單 TODO</span>
+      <span id="pBadge" style="font-size:.7rem;color:var(--muted)">0 項</span>
+    </div>
+    <div class="panel-bd">
+      <div class="prac-body">
+        <div class="voice-row">
+          <span class="v-label">🔊 聲音</span>
+          <select class="v-sel" id="voiceSel">
+            <option value="Brian">Brian（男）</option>
+            <option value="Amy">Amy（女）</option>
+            <option value="Joey">Joey（男）</option>
+            <option value="Joanna">Joanna（女）</option>
+          </select>
+        </div>
+        <div class="speed-row">
+          <span class="v-label">⚡ 語速</span>
+          <div class="speed-chips">
+            <button class="sp-chip" data-r=".7" onclick="setRate(this)">0.7x</button>
+            <button class="sp-chip active" data-r="1" onclick="setRate(this)">1.0x</button>
+            <button class="sp-chip" data-r="1.3" onclick="setRate(this)">1.3x</button>
+            <button class="sp-chip" data-r="1.6" onclick="setRate(this)">1.6x</button>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="prog-lbl">
+          <span>練習進度</span>
+          <span><span id="doneN" style="color:var(--green);font-weight:600">0</span> / <span id="totalN">0</span></span>
+        </div>
+        <div class="prog-wrap"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+        <div class="ftabs">
+          <button class="ftab active" data-f="all" onclick="setFilter(this)">全部</button>
+          <button class="ftab" data-f="pending" onclick="setFilter(this)">待練習</button>
+          <button class="ftab" data-f="done" onclick="setFilter(this)">已完成</button>
+        </div>
+        <div class="todo-list" id="todoList">
+          <div class="empty-hint">從左側對話記錄點「＋ 加入練習」</div>
+        </div>
+        <div class="divider"></div>
+        <div style="font-size:.7rem;color:var(--muted);margin-bottom:6px;">手動新增語句</div>
+        <div class="manual-row">
+          <input type="text" class="manual-input" id="manInput" placeholder="輸入英文語句後按 Enter..."
+            onkeydown="if(event.key==='Enter')addManual()">
+          <button class="btn btn-primary btn-sm" onclick="addManual()">加入</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel-ft">
+      <button class="btn btn-ghost btn-sm" onclick="playAll()">▶ 全部播放</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearDone()">清除已完成</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportTSV()">匯出</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: New Lesson -->
+<div class="modal-overlay" id="newLessonMo">
+  <div class="modal">
+    <div class="modal-title">新增課堂</div>
+    <div class="modal-sub">建立新的 ESL 課堂紀錄</div>
+    <div class="f-field"><label class="f-label">課堂主題 / Topic</label>
+      <input type="text" class="f-input" id="nlTitle" placeholder="e.g. The Right to Know"></div>
+    <div class="f-field"><label class="f-label">學生姓名</label>
+      <input type="text" class="f-input" id="nlStudent" placeholder="e.g. Winnie" value="Winnie"></div>
+    <div class="f-field"><label class="f-label">日期</label>
+      <input type="date" class="f-input" id="nlDate"></div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="closeMo('newLessonMo')">取消</button>
+      <button class="btn btn-primary" onclick="createLesson()">建立課堂</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Add Exchange -->
+<div class="modal-overlay" id="addExMo">
+  <div class="modal">
+    <div class="modal-title">新增對話</div>
+    <div class="f-field">
+      <label class="f-label">說話角色</label>
+      <div class="role-tabs">
+        <button class="role-tab active" data-role="teacher" onclick="selRole(this)">Teacher</button>
+        <button class="role-tab" data-role="student" onclick="selRole(this)">Student</button>
+        <button class="role-tab" data-role="section" onclick="selRole(this)">段落標題</button>
+      </div>
+    </div>
+    <div class="f-field" id="secField" style="display:none">
+      <label class="f-label">段落標題文字</label>
+      <input type="text" class="f-input" id="aeSection" placeholder="e.g. 詞彙學習 VOCABULARY"></div>
+    <div class="f-field" id="textField">
+      <label class="f-label" id="textFieldLbl">對話內容</label>
+      <textarea class="f-textarea" id="aeText" placeholder="Enter dialogue text..."></textarea>
+    </div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="closeMo('addExMo')">取消</button>
+      <button class="btn btn-primary" onclick="submitEx()">新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Correction Editor -->
+<div class="modal-overlay" id="corrMo">
+  <div class="modal">
+    <div class="modal-title">✎ 新增修正</div>
+    <div class="modal-sub" id="corrMoSub"></div>
+
+    <!-- Original text display -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:14px">
+      <div style="font-size:.68rem;color:var(--muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.08em">原始語句</div>
+      <div id="corrOriginal" style="font-size:.84rem;line-height:1.65"></div>
+    </div>
+
+    <!-- Existing corrections -->
+    <div id="existingCorr"></div>
+
+    <!-- Add new correction -->
+    <div style="font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px">新增一筆修正</div>
+    <div class="f-field">
+      <label class="f-label">錯誤語句（原文中需劃掉的部分）</label>
+      <input type="text" class="f-input" id="cWrong" placeholder="e.g. they will die quickly"
+        onkeydown="if(event.key==='Enter')addCorrEntry()">
+    </div>
+    <div class="f-field">
+      <label class="f-label">正確用法</label>
+      <input type="text" class="f-input" id="cCorrect" placeholder="e.g. they may not recover"
+        onkeydown="if(event.key==='Enter')addCorrEntry()">
+    </div>
+    <div class="f-field">
+      <label class="f-label">修正說明（選填）</label>
+      <textarea class="f-textarea" style="min-height:56px" id="cNote"
+        placeholder="e.g. 「die quickly」語感不精確，terminally ill 指終將致死，不一定短期內"></textarea>
+    </div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="addCorrEntry()">＋ 加入此修正</button>
+    </div>
+    <div class="divider"></div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="closeMo('corrMo')">關閉</button>
+      <button class="btn btn-green" onclick="corrAddToPractice()">＋ 加入練習清單</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Import -->
+<div class="modal-overlay" id="importMo">
+  <div class="modal">
+    <div class="modal-title">貼上逐字稿</div>
+    <div class="modal-sub">支援 <code>Teacher:</code> 和 <code>學生姓名:</code> 格式，自動解析成對話列表</div>
+    <div class="f-field">
+      <label class="f-label">學生姓名（用於識別學生台詞）</label>
+      <input type="text" class="f-input" id="impStudent" placeholder="e.g. Winnie" value="Winnie">
+    </div>
+    <div class="f-field">
+      <label class="f-label">逐字稿文字</label>
+      <textarea class="f-textarea" style="min-height:180px" id="impText"
+        placeholder="Teacher: What is the meaning of terminally ill?
+Winnie: The patient has a serious disease, so they will die quickly.
+Teacher: Do you know someone who has an incurable disease?
+Winnie: Yes, my aunt. they control the cancer as well."></textarea>
+    </div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="closeMo('importMo')">取消</button>
+      <button class="btn btn-primary" onclick="runImport()">解析並匯入</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Claude HTML Import -->
+<div class="modal-overlay" id="htmlImportMo">
+  <div class="modal">
+    <div class="modal-title">📥 匯入 Claude 修正 HTML</div>
+    <div class="modal-sub">將 Claude 回傳的 HTML 原始碼全選複製，貼到下方即可一次建立課堂、對話與所有修正</div>
+    <div class="f-field">
+      <label class="f-label">Claude 回傳的 HTML 原始碼</label>
+      <textarea class="f-textarea" id="htmlImportInput" style="min-height:200px;font-size:.72rem;font-family:monospace"
+        placeholder="將 Claude 回傳的整段 HTML 貼到這裡...
+（包含 &lt;style&gt; 區塊和 &lt;div class=&quot;transcript-wrap&quot;&gt; 的完整內容）"></textarea>
+    </div>
+    <div style="background:#f0f4ff;border:1px solid #c5d0f7;border-radius:8px;padding:10px 14px;font-size:.72rem;color:#3a52c4;margin-bottom:12px">
+      💡 <strong>如何取得 HTML？</strong><br>
+      在 Claude.ai 回覆中，點右上角「···」→「Copy as HTML」；
+      或對回覆右鍵 → 檢視原始碼，複製 <code>&lt;div class="transcript-wrap"&gt;</code> 的區塊。
+    </div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="closeMo('htmlImportMo')">取消</button>
+      <button class="btn btn-primary" onclick="runHTMLImport()">解析並建立課堂</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Settings -->
+<div class="modal-overlay" id="settingsMo">
+  <div class="modal">
+    <div class="modal-title">⚙ 設定</div>
+    <div class="modal-sub">Claude API Key 儲存在本機瀏覽器，不會上傳至任何伺服器</div>
+    <div class="f-field">
+      <label class="f-label">Anthropic Claude API Key（選填）</label>
+      <input type="password" class="f-input" id="apiKeyInput" placeholder="sk-ant-api03-...">
+      <div style="font-size:.7rem;color:var(--muted);margin-top:6px">
+        取得 API Key：<a href="https://console.anthropic.com" target="_blank" style="color:var(--accent)">console.anthropic.com</a>
+        · 有 Key 才能直接從工具呼叫 AI；無 Key 則使用提示詞複製模式
+      </div>
+    </div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="closeMo('settingsMo')">取消</button>
+      <button class="btn btn-primary" onclick="saveSettings()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Prompt Generator / JSON Paste -->
+<div class="modal-overlay" id="promptGenMo">
+  <div class="modal">
+    <div class="modal-title">📋 AI 提示詞產生器</div>
+    <div class="modal-sub">複製下方提示詞，貼到 Claude.ai 取得 JSON，再貼回下方套用</div>
+    <div class="f-field">
+      <label class="f-label">步驟 1 — 複製此提示詞 → 貼到 Claude.ai</label>
+      <textarea class="f-textarea" id="promptGenText" style="min-height:130px;font-size:.73rem;font-family:monospace" readonly></textarea>
+      <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="copyPrompt()">📋 複製提示詞</button>
+    </div>
+    <div class="f-field" style="margin-top:4px">
+      <label class="f-label">步驟 2 — 將 Claude 回覆的 JSON 貼到這裡</label>
+      <textarea class="f-textarea" id="promptResultInput" style="min-height:100px;font-size:.73rem;font-family:monospace" placeholder='[{"id":"...","corrections":[...]}]'></textarea>
+    </div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="closeMo('promptGenMo')">取消</button>
+      <button class="btn btn-primary" onclick="applyPromptResult()">套用 AI 修正</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Line Role Assignment -->
+<div class="modal-overlay" id="lineRoleMo">
+  <div class="modal">
+    <div class="modal-title">指定說話角色</div>
+    <div class="modal-sub" id="lineRoleMoSub">系統已自動偵測角色，請確認或調整後匯入</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <span style="font-size:.72rem;color:var(--muted)">快速操作：</span>
+      <button class="btn btn-ghost btn-sm" onclick="flipAllRoles()">T ↔ S 全部翻轉</button>
+      <button class="btn btn-ghost btn-sm" onclick="setAllRoles('teacher')">全部設為 Teacher</button>
+      <button class="btn btn-ghost btn-sm" onclick="setAllRoles('student')">全部設為 Student</button>
+    </div>
+    <div class="lr-list" id="lineRoleList"></div>
+    <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">
+      <span style="display:inline-block;width:10px;height:10px;background:var(--accent);border-radius:2px;margin-right:4px"></span>T = Teacher
+      <span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;margin:0 4px 0 12px"></span>S = Student
+      <span style="display:inline-block;width:10px;height:10px;background:#aaa;border-radius:2px;margin:0 4px 0 12px"></span>— = 略過
+    </div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="closeMo('lineRoleMo')">取消</button>
+      <button class="btn btn-primary" onclick="confirmLineImport()">確認匯入</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Auto Correct Review -->
+<div class="modal-overlay" id="autoMo">
+  <div class="modal">
+    <div class="modal-title">🤖 自動修正建議</div>
+    <div class="modal-sub" id="autoMoSub">LanguageTool 分析結果</div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:14px">
+      <div style="font-size:.68rem;color:var(--muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.08em">原始語句</div>
+      <div id="autoOrigText" style="font-size:.84rem;line-height:1.65"></div>
+    </div>
+    <div id="autoSugsList" class="auto-sugs"></div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="closeMo('autoMo')">取消</button>
+      <button class="btn btn-primary" onclick="applyAuto()">套用選取的修正</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SK = 'esl_v2';
+let D = { lessons:[], activeId:null, practice:[], plays:0 };
+
+let filter='all', rate=1.0, audio=null, playingId=null;
+let playingAll=false, allQueue=[], allIdx=0;
+let corrExId=null; // exchange being edited in correction modal
+
+// ── STORAGE ───────────────────────────────────────────────────────────────
+function load(){ try{ const r=localStorage.getItem(SK); if(r) D=JSON.parse(r); }catch(e){} }
+function save(){ localStorage.setItem(SK,JSON.stringify(D)); }
+function uid(){ return '_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── LESSON ────────────────────────────────────────────────────────────────
+function lesson(){ return D.lessons.find(l=>l.id===D.activeId)||null; }
+
+function openNewLesson(){
+  document.getElementById('nlDate').value=new Date().toISOString().slice(0,10);
+  openMo('newLessonMo');
+}
+function createLesson(){
+  const t=document.getElementById('nlTitle').value.trim();
+  const s=document.getElementById('nlStudent').value.trim()||'Student';
+  const d=document.getElementById('nlDate').value||new Date().toISOString().slice(0,10);
+  const l={ id:uid(), title:t||'未命名課堂', student:s, date:d, exchanges:[] };
+  D.lessons.push(l); D.activeId=l.id; save();
+  closeMo('newLessonMo');
+  renderSel(); renderDlg();
+  toast(`課堂「${l.title}」已建立`);
+}
+function switchLesson(id){ D.activeId=id||null; save(); renderDlg(); }
+
+// ── EXCHANGE ──────────────────────────────────────────────────────────────
+let pendRole='teacher';
+function openAddEx(role){
+  if(!lesson()){ toast('請先選擇課堂'); return; }
+  pendRole=role;
+  document.querySelectorAll('.role-tab').forEach(t=>t.classList.toggle('active',t.dataset.role===role));
+  document.getElementById('aeText').value='';
+  document.getElementById('aeSection').value='';
+  updateExFields(role);
+  openMo('addExMo');
+  setTimeout(()=>document.getElementById(role==='section'?'aeSection':'aeText').focus(),80);
+}
+function selRole(el){
+  pendRole=el.dataset.role;
+  document.querySelectorAll('.role-tab').forEach(t=>t.classList.toggle('active',t===el));
+  updateExFields(pendRole);
+}
+function updateExFields(role){
+  document.getElementById('secField').style.display=role==='section'?'block':'none';
+  document.getElementById('textField').style.display=role==='section'?'none':'block';
+}
+function submitEx(){
+  const l=lesson(); if(!l) return;
+  if(pendRole==='section'){
+    const t=document.getElementById('aeSection').value.trim();
+    if(!t){ toast('請輸入標題'); return; }
+    l.exchanges.push({id:uid(),role:'section',title:t});
+  } else {
+    const t=document.getElementById('aeText').value.trim();
+    if(!t){ toast('請輸入對話'); return; }
+    l.exchanges.push({id:uid(),role:pendRole,text:t,corrections:[]});
+  }
+  save(); closeMo('addExMo'); renderDlg();
+}
+function delEx(id){
+  const l=lesson(); if(!l) return;
+  l.exchanges=l.exchanges.filter(e=>e.id!==id);
+  save(); renderDlg();
+}
+
+// ── CORRECTIONS ───────────────────────────────────────────────────────────
+function openCorrMo(exId){
+  const l=lesson(); if(!l) return;
+  const ex=l.exchanges.find(e=>e.id===exId); if(!ex) return;
+  corrExId=exId;
+  document.getElementById('corrMoSub').textContent=`學生：${l.student}`;
+  document.getElementById('corrOriginal').textContent=ex.text;
+  document.getElementById('cWrong').value='';
+  document.getElementById('cCorrect').value='';
+  document.getElementById('cNote').value='';
+  renderCorrCards(ex.corrections, exId);
+  openMo('corrMo');
+  setTimeout(()=>document.getElementById('cWrong').focus(),80);
+}
+
+function renderCorrCards(corrections, exId){
+  const el=document.getElementById('existingCorr');
+  if(!corrections||!corrections.length){
+    el.innerHTML='<div style="font-size:.74rem;color:var(--muted);margin-bottom:10px">尚無修正記錄</div>';
+    return;
+  }
+  el.innerHTML=`<div class="corr-list">${corrections.map((c,i)=>`
+    <div class="corr-card">
+      <div class="corr-card-body">
+        <div class="corr-wrong">${esc(c.wrong)}</div>
+        <div class="corr-correct">→ ${esc(c.correct)}</div>
+        ${c.note?`<div class="corr-note">${esc(c.note)}</div>`:''}
+      </div>
+      <button class="ibtn del" onclick="delCorr('${exId}',${i})" title="刪除">✕</button>
+    </div>`).join('')}</div>`;
+}
+
+function addCorrEntry(){
+  const wrong=document.getElementById('cWrong').value.trim();
+  const correct=document.getElementById('cCorrect').value.trim();
+  const note=document.getElementById('cNote').value.trim();
+  if(!wrong||!correct){ toast('請填寫錯誤語句及正確用法'); return; }
+  const l=lesson();
+  const ex=l.exchanges.find(e=>e.id===corrExId); if(!ex) return;
+  ex.corrections.push({wrong,correct,note});
+  save();
+  renderCorrCards(ex.corrections, corrExId);
+  renderDlg();
+  document.getElementById('cWrong').value='';
+  document.getElementById('cCorrect').value='';
+  document.getElementById('cNote').value='';
+  document.getElementById('cWrong').focus();
+  toast('修正已加入');
+}
+
+function delCorr(exId, idx){
+  const l=lesson();
+  const ex=l.exchanges.find(e=>e.id===exId); if(!ex) return;
+  ex.corrections.splice(idx,1);
+  save(); renderCorrCards(ex.corrections,exId); renderDlg();
+}
+
+function corrAddToPractice(){
+  const l=lesson();
+  const ex=l.exchanges.find(e=>e.id===corrExId); if(!ex) return;
+  addPracticeText(corrected(ex), corrExId);
+}
+
+function addExToPractice(exId){
+  const l=lesson(); if(!l) return;
+  const ex=l.exchanges.find(e=>e.id===exId); if(!ex) return;
+  addPracticeText(corrected(ex), exId);
+}
+
+function corrected(ex){
+  if(!ex.corrections||!ex.corrections.length) return ex.text;
+  let t=ex.text;
+  ex.corrections.forEach(c=>{
+    t=t.replace(new RegExp(c.wrong.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),c.correct);
+  });
+  return t;
+}
+
+function renderWithCorr(text, corrections){
+  if(!corrections||!corrections.length) return esc(text);
+  const spans=[];
+  corrections.forEach(c=>{
+    const idx=text.toLowerCase().indexOf(c.wrong.toLowerCase());
+    if(idx!==-1) spans.push({start:idx,end:idx+c.wrong.length,wrong:c.wrong,correct:c.correct});
+  });
+  spans.sort((a,b)=>a.start-b.start);
+  let html='',pos=0;
+  spans.forEach(s=>{
+    if(s.start>pos) html+=esc(text.slice(pos,s.start));
+    html+=`<span class="wrong-text">${esc(s.wrong)}</span><span class="correct-text">${esc(s.correct)}</span>`;
+    pos=s.end;
+  });
+  if(pos<text.length) html+=esc(text.slice(pos));
+  return html;
+}
+
+// ── DIALOGUE RENDER ───────────────────────────────────────────────────────
+function renderSel(){
+  const sel=document.getElementById('lessonSel');
+  sel.innerHTML='<option value="">— 選擇課堂 —</option>'+
+    D.lessons.map(l=>`<option value="${l.id}"${l.id===D.activeId?' selected':''}>${l.date} ${l.title} (${l.student})</option>`).join('');
+}
+
+function renderDlg(){
+  const l=lesson();
+  const dlg=document.getElementById('dialogue');
+  const bar=document.getElementById('addBar');
+
+  if(!l){
+    document.getElementById('lessonTopic').textContent='尚未選擇課堂';
+    document.getElementById('lessonDate').textContent='請從上方選擇或新增課堂';
+    bar.style.display='none';
+    dlg.innerHTML='<div class="empty-dlg"><div class="ei">📝</div>新增課堂後開始記錄對話</div>';
+    return;
+  }
+  document.getElementById('lessonTopic').textContent=`Topic: ${l.title} · Student: ${l.student}`;
+  document.getElementById('lessonDate').textContent=l.date;
+  bar.style.display='flex';
+
+  if(!l.exchanges.length){
+    dlg.innerHTML='<div class="empty-dlg"><div class="ei">💬</div>點下方按鈕開始新增對話</div>';
+    return;
+  }
+
+  dlg.innerHTML=l.exchanges.map(ex=>{
+    if(ex.role==='section')
+      return `<div class="ex-section"><span class="ex-section-label">${esc(ex.title)}</span></div>`;
+
+    const isStu=ex.role==='student';
+    const name=isStu?l.student:'Teacher';
+    const roleClass=isStu?'student':'teacher';
+    const textHtml=isStu?renderWithCorr(ex.text,ex.corrections):esc(ex.text);
+    const notesHtml=isStu&&ex.corrections&&ex.corrections.some(c=>c.note)
+      ?`<div class="ex-notes">${ex.corrections.filter(c=>c.note).map(c=>`<div class="ex-note">${esc(c.note)}</div>`).join('')}</div>`:'';
+    const actions=isStu
+      ?`<button class="btn btn-auto btn-sm" id="autobtn-${ex.id}" onclick="autoCorr('${ex.id}')">🤖 自動修正</button>
+        <button class="btn btn-ghost btn-sm" onclick="openCorrMo('${ex.id}')">✎ 手動修正</button>
+        <button class="btn btn-ghost btn-sm" onclick="addExToPractice('${ex.id}')">＋ 加入練習</button>
+        <button class="ibtn del btn-sm" onclick="delEx('${ex.id}')" title="刪除">✕</button>`
+      :`<button class="ibtn del btn-sm" onclick="delEx('${ex.id}')" title="刪除">✕</button>`;
+
+    return `<div class="exchange" id="ex-${ex.id}">
+      <div class="ex-role ${roleClass}">${esc(name)}</div>
+      <div class="ex-body">
+        <div class="ex-text">${textHtml}</div>
+        ${notesHtml}
+      </div>
+      <div class="ex-actions">${actions}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── PRACTICE ──────────────────────────────────────────────────────────────
+function addPracticeText(text, sourceId){
+  if(D.practice.find(x=>x.text===text)){ toast('此語句已在練習清單中'); return; }
+  D.practice.push({id:uid(),text,sourceId,done:false,plays:0,addedAt:new Date().toISOString().slice(0,10)});
+  save(); renderPractice(); toast('已加入練習清單');
+}
+
+function addManual(){
+  const input=document.getElementById('manInput');
+  const text=input.value.trim(); if(!text) return;
+  addPracticeText(text,'manual');
+  input.value='';
+}
+
+function filterItems(){
+  switch(filter){
+    case 'pending': return D.practice.filter(x=>!x.done);
+    case 'done':    return D.practice.filter(x=>x.done);
+    default:        return D.practice;
+  }
+}
+
+function renderPractice(){
+  const list=document.getElementById('todoList');
+  const total=D.practice.length;
+  const done=D.practice.filter(x=>x.done).length;
+  const pct=total?Math.round(done/total*100):0;
+  document.getElementById('doneN').textContent=done;
+  document.getElementById('totalN').textContent=total;
+  document.getElementById('progFill').style.width=pct+'%';
+  document.getElementById('pBadge').textContent=total+' 項';
+
+  const items=filterItems();
+  if(!total){ list.innerHTML='<div class="empty-hint">從左側對話記錄點「＋ 加入練習」</div>'; return; }
+  if(!items.length){ list.innerHTML='<div class="empty-hint">此篩選條件下沒有項目</div>'; return; }
+
+  list.innerHTML=items.map(item=>`
+    <div class="todo-item ${item.done?'done':''}" id="ti-${item.id}">
+      <div class="t-check" onclick="toggleDone('${item.id}')">
+        <span class="t-check-icon">✓</span>
+      </div>
+      <div class="t-main">
+        <div class="todo-text">${esc(item.text)}</div>
+        <div class="todo-meta">${item.addedAt}${item.plays?` · 播放 ${item.plays} 次`:''}</div>
+      </div>
+      <div class="t-acts">
+        <button class="ibtn play" data-id="${item.id}" onclick="playItem('${item.id}')" title="播放">▶</button>
+        <button class="ibtn del" onclick="delItem('${item.id}')" title="刪除">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function setFilter(el){
+  filter=el.dataset.f;
+  document.querySelectorAll('.ftab').forEach(t=>t.classList.toggle('active',t===el));
+  renderPractice();
+}
+function toggleDone(id){
+  const x=D.practice.find(p=>p.id===id); if(!x) return;
+  x.done=!x.done; save(); renderPractice();
+}
+function delItem(id){
+  D.practice=D.practice.filter(p=>p.id!==id); save(); renderPractice(); toast('已刪除');
+}
+function clearDone(){
+  const n=D.practice.filter(x=>x.done).length; if(!n){ toast('沒有已完成的項目'); return; }
+  D.practice=D.practice.filter(x=>!x.done); save(); renderPractice(); toast(`已清除 ${n} 個`);
+}
+function exportTSV(){
+  if(!D.practice.length){ toast('清單是空的'); return; }
+  const lines=['狀態\t句子\t播放次數\t日期'];
+  D.practice.forEach(x=>lines.push(`${x.done?'✅':'⬜'}\t${x.text}\t${x.plays||0}\t${x.addedAt}`));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/tab-separated-values;charset=utf-8'}));
+  a.download='ESL練習清單.tsv'; a.click();
+}
+
+// ── TTS ───────────────────────────────────────────────────────────────────
+const TTS='https://api.streamelements.com/kappa/v2/speech';
+
+function speak(text, btn){
+  if(audio){ audio.pause(); audio=null; }
+  if(playingId){
+    const p=document.querySelector(`.ibtn.play[data-playing="${playingId}"]`);
+    if(p){ p.classList.remove('playing'); p.textContent='▶'; p.removeAttribute('data-playing'); }
+    playingId=null;
+  }
+  const voice=document.getElementById('voiceSel').value;
+  const a=new Audio(`${TTS}?voice=${voice}&text=${encodeURIComponent(text)}`);
+  a.playbackRate=rate; audio=a;
+  if(btn){ btn.classList.add('playing'); btn.textContent='⏸'; btn.setAttribute('data-playing',btn.dataset.id||''); playingId=btn.dataset.id; }
+
+  const onEnd=()=>{
+    if(btn){ btn.classList.remove('playing'); btn.textContent='▶'; btn.removeAttribute('data-playing'); }
+    audio=null; playingId=null;
+    if(playingAll) nextPlay();
+  };
+  a.onended=onEnd;
+  a.onerror=()=>{ fallback(text,onEnd); if(btn){ btn.classList.remove('playing'); btn.textContent='▶'; } };
+  a.play().catch(()=>{ fallback(text,onEnd); if(btn){ btn.classList.remove('playing'); btn.textContent='▶'; } });
+}
+
+function fallback(text,cb){
+  if(!('speechSynthesis' in window)){ cb(); return; }
+  const u=new SpeechSynthesisUtterance(text);
+  u.rate=rate; u.lang='en-US'; u.onend=cb;
+  speechSynthesis.speak(u);
+}
+
+function playItem(id){
+  const x=D.practice.find(p=>p.id===id); if(!x) return;
+  x.plays=(x.plays||0)+1; D.plays++; save(); renderPractice();
+  speak(x.text, document.querySelector(`.ibtn.play[data-id="${id}"]`));
+}
+
+function playAll(){
+  const pending=filterItems().filter(x=>!x.done);
+  if(!pending.length){ toast('沒有待練習的語句'); return; }
+  allQueue=pending; allIdx=0; playingAll=true; nextPlay();
+}
+function nextPlay(){
+  if(!playingAll||allIdx>=allQueue.length){ playingAll=false; toast('全部播放完畢'); return; }
+  const x=allQueue[allIdx++];
+  x.plays=(x.plays||0)+1; D.plays++; save(); renderPractice();
+  speak(x.text, document.querySelector(`.ibtn.play[data-id="${x.id}"]`));
+}
+
+function setRate(el){
+  rate=parseFloat(el.dataset.r);
+  document.querySelectorAll('.sp-chip').forEach(c=>c.classList.toggle('active',c===el));
+}
+
+// ── IMPORT ────────────────────────────────────────────────────────────────
+let pendingLines=[], pendingStudent='Winnie', lineRoles=[];
+
+function smartAssign(lines, studentName){
+  // Short filler words often said by student (responses)
+  const studentFillers=/^(yes|no|okay|ok|sure|sorry|thanks|thank you|right|i see|fine|i know|maybe|hmm|ah|really|yes yes|no no|oh|i understand|agreed|of course|definitely|i think|i don't know|i'm not sure|i'm not|i feel|i think so|but|so|because|and|it's|yes i|no i)[\.,!]?$/i;
+  // System / metadata lines to skip
+  const systemLine=/conference|connection|internet|screen|sound|audio|microphone|you are currently/i;
+
+  const roles=lines.map(()=>'teacher'); // default all Teacher
+
+  for(let i=0;i<lines.length;i++){
+    const t=lines[i].trim();
+    const words=t.split(/\s+/);
+    const isQ=t.endsWith('?');
+    const prevIsQ=i>0&&lines[i-1].trim().endsWith('?');
+
+    // System lines → skip
+    if(systemLine.test(t)){ roles[i]='skip'; continue; }
+
+    // Questions → Teacher
+    if(isQ){ roles[i]='teacher'; continue; }
+
+    // Line immediately after a question → Student
+    if(prevIsQ){ roles[i]='student'; continue; }
+
+    // Short filler responses → Student
+    if(studentFillers.test(t)){ roles[i]='student'; continue; }
+
+    // Very short lines (1-3 words) after a student line → Student
+    if(words.length<=3 && i>0 && roles[i-1]==='student'){ roles[i]='student'; continue; }
+
+    // Student self-identification
+    if(new RegExp(`i'?m\\s+${studentName}`,'i').test(t)){ roles[i]='student'; continue; }
+
+    // Teacher self-identification
+    if(/i'?m\s+teacher/i.test(t)){ roles[i]='teacher'; continue; }
+
+    // Long sentence after teacher → keep teacher (explaining)
+    if(i>0 && roles[i-1]==='teacher' && words.length>12){ roles[i]='teacher'; continue; }
+
+    // After student short reply → back to teacher
+    if(i>0 && roles[i-1]==='student' && words.length>8){ roles[i]='teacher'; continue; }
+
+    // After student → teacher, after teacher → student (fallback alternate)
+    roles[i]=i>0 ? (roles[i-1]==='teacher'?'student':'teacher') : 'teacher';
+  }
+  return roles;
+}
+
+function openImport(){
+  const l=lesson();
+  document.getElementById('impStudent').value=l?l.student:'Winnie';
+  document.getElementById('impText').value='';
+  openMo('importMo');
+}
+
+function runImport(){
+  const studentName=document.getElementById('impStudent').value.trim()||'Winnie';
+  const raw=document.getElementById('impText').value.trim();
+  if(!raw){ toast('請貼上逐字稿'); return; }
+
+  const tRe=new RegExp('^(?:Teacher|T)\\s*:\\s*(.+)','i');
+  const sRe=new RegExp(`^(?:${studentName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}|S)\\s*:\\s*(.+)`,'i');
+  const lines=raw.split('\n').map(s=>s.trim()).filter(Boolean);
+
+  // Check if any line has role labels
+  const hasLabels=lines.some(l=>tRe.test(l)||sRe.test(l));
+
+  if(hasLabels){
+    // Labeled format → import directly
+    let l=ensureLesson(studentName);
+    let added=0;
+    lines.forEach(line=>{
+      const tm=line.match(tRe), sm=line.match(sRe);
+      if(tm){ l.exchanges.push({id:uid(),role:'teacher',text:tm[1].trim(),corrections:[]}); added++; }
+      else if(sm){ l.exchanges.push({id:uid(),role:'student',text:sm[1].trim(),corrections:[]}); added++; }
+    });
+    save(); renderSel(); renderDlg(); closeMo('importMo');
+    toast(`已匯入 ${added} 條對話`);
+  } else {
+    // No labels → show role assignment modal
+    pendingLines=lines;
+    pendingStudent=studentName;
+    // Smart auto-detect roles
+    lineRoles=smartAssign(lines, studentName);
+    renderLineRoles();
+    closeMo('importMo');
+    openMo('lineRoleMo');
+  }
+}
+
+function ensureLesson(studentName){
+  let l=lesson();
+  if(!l){
+    l={id:uid(),title:'匯入課堂',student:studentName,date:new Date().toISOString().slice(0,10),exchanges:[]};
+    D.lessons.push(l); D.activeId=l.id;
+  }
+  return l;
+}
+
+function renderLineRoles(){
+  const tN=lineRoles.filter(r=>r==='teacher').length;
+  const sN=lineRoles.filter(r=>r==='student').length;
+  const skN=lineRoles.filter(r=>r==='skip').length;
+  // Update sub text with stats
+  const sub=document.getElementById('lineRoleMoSub');
+  if(sub) sub.textContent=`共 ${pendingLines.length} 行 · Teacher ${tN} · Student ${sN} · 略過 ${skN}｜可調整後確認匯入`;
+
+  document.getElementById('lineRoleList').innerHTML=pendingLines.map((text,i)=>{
+    const r=lineRoles[i];
+    const rowClass='lr-row '+(r==='skip'?'lr-skip':r==='teacher'?'lr-t':'lr-s');
+    return`<div class="${rowClass}" id="lr-${i}">
+      <div class="lr-btns">
+        <button class="lrb t${r==='teacher'?' on':''}" onclick="setRole(${i},'teacher')">T</button>
+        <button class="lrb s${r==='student'?' on':''}" onclick="setRole(${i},'student')">S</button>
+        <button class="lrb sk${r==='skip'?' on':''}" onclick="setRole(${i},'skip')">—</button>
+      </div>
+      <div class="lr-text">${esc(text)}</div>
+    </div>`;
+  }).join('');
+}
+
+function setRole(i,role){
+  lineRoles[i]=role;
+  const row=document.getElementById('lr-'+i);
+  row.className='lr-row '+(role==='skip'?'lr-skip':role==='teacher'?'lr-t':'lr-s');
+  row.querySelectorAll('.lrb').forEach(b=>{
+    b.classList.toggle('on',
+      (b.classList.contains('t')&&role==='teacher')||
+      (b.classList.contains('s')&&role==='student')||
+      (b.classList.contains('sk')&&role==='skip'));
+  });
+  // Refresh stats
+  const tN=lineRoles.filter(r=>r==='teacher').length;
+  const sN=lineRoles.filter(r=>r==='student').length;
+  const skN=lineRoles.filter(r=>r==='skip').length;
+  const sub=document.getElementById('lineRoleMoSub');
+  if(sub) sub.textContent=`共 ${pendingLines.length} 行 · Teacher ${tN} · Student ${sN} · 略過 ${skN}｜可調整後確認匯入`;
+}
+
+function flipAllRoles(){
+  lineRoles=lineRoles.map(r=>r==='teacher'?'student':r==='student'?'teacher':r);
+  renderLineRoles();
+}
+
+function setAllRoles(role){
+  lineRoles=lineRoles.map(()=>role);
+  renderLineRoles();
+}
+
+function confirmLineImport(){
+  const l=ensureLesson(pendingStudent);
+  let added=0;
+  pendingLines.forEach((text,i)=>{
+    const r=lineRoles[i];
+    if(r==='skip') return;
+    l.exchanges.push({id:uid(),role:r,text,corrections:[]});
+    added++;
+  });
+  save(); renderSel(); renderDlg(); closeMo('lineRoleMo');
+  toast(`已匯入 ${added} 條對話`);
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────
+function openMo(id){ document.getElementById(id).classList.add('open'); }
+function closeMo(id){ document.getElementById(id).classList.remove('open'); }
+['newLessonMo','addExMo','corrMo','importMo','autoMo','lineRoleMo','settingsMo','promptGenMo','htmlImportMo'].forEach(id=>{
+  document.getElementById(id).addEventListener('click',e=>{
+    if(e.target===document.getElementById(id)) closeMo(id);
+  });
+});
+
+// ── TOAST ─────────────────────────────────────────────────────────────────
+let toastT;
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),2400);
+}
+
+// ── CLAUDE HTML IMPORT ───────────────────────────────────────────────────
+function openHTMLImport(){
+  document.getElementById('htmlImportInput').value='';
+  openMo('htmlImportMo');
+}
+
+function runHTMLImport(){
+  const raw=document.getElementById('htmlImportInput').value.trim();
+  if(!raw){ toast('請貼上 HTML'); return; }
+  const parsed=parseClaudeHTML(raw);
+  if(!parsed||!parsed.exchanges.length){ toast('解析失敗：找不到對話內容，請確認 HTML 格式正確'); return; }
+
+  const l={
+    id:uid(),
+    title:parsed.topic,
+    student:parsed.studentName,
+    date:new Date().toISOString().slice(0,10),
+    exchanges:parsed.exchanges
+  };
+  D.lessons.push(l); D.activeId=l.id;
+  save(); renderSel(); renderDlg(); closeMo('htmlImportMo');
+
+  const stuCount=l.exchanges.filter(e=>e.role==='student').length;
+  const corrCount=l.exchanges.reduce((n,e)=>n+(e.corrections?.length||0),0);
+  toast(`已匯入「${l.title}」· ${stuCount} 句學生對話 · ${corrCount} 筆修正`);
+}
+
+function parseClaudeHTML(htmlStr){
+  const parser=new DOMParser();
+  const doc=parser.parseFromString(htmlStr,'text/html');
+
+  // Find the transcript wrapper (try multiple selectors)
+  const wrap=doc.querySelector('.transcript-wrap')||doc.body;
+  if(!wrap) return null;
+
+  // Extract metadata from title paragraph
+  const metaEl=wrap.querySelector('p');
+  const metaText=metaEl?metaEl.textContent:'';
+  const studentM=metaText.match(/Student\s*[:：]\s*([^\s·•,]+)/i);
+  const topicM=metaText.match(/Topic\s*[:：]\s*([^·•]+)/i);
+  const studentName=(studentM?studentM[1].trim():'Student').replace(/[·•].*/,'').trim();
+  const topic=(topicM?topicM[1].trim():'匯入課堂').replace(/[·•].*/,'').trim();
+
+  const exchanges=[];
+  const nodes=wrap.children;
+
+  for(const el of nodes){
+    const cls=el.className||'';
+
+    // Section header
+    if(cls.includes('section-title')||cls.includes('section_title')){
+      exchanges.push({id:uid(),role:'section',title:el.textContent.trim()});
+      continue;
+    }
+
+    // Skip non-exchange elements (hr, legend, h2, p with metadata)
+    if(el.tagName==='HR'||cls.includes('divider')||cls.includes('legend')||
+       el.tagName==='H2'||el.tagName==='H3') continue;
+
+    // Exchange block
+    if(cls.includes('exchange')){
+      const speakerT=el.querySelector('.speaker-t,.speaker_t');
+      const speakerS=el.querySelector('.speaker-s,.speaker_s');
+      if(!speakerT&&!speakerS) continue;
+
+      const isStudent=!!speakerS;
+      const lineEls=Array.from(el.querySelectorAll('.line'));
+      const noteEls=Array.from(el.querySelectorAll('.note'));
+
+      if(!isStudent){
+        // Teacher: plain text from all lines
+        const text=lineEls.map(l=>l.textContent.trim()).join(' ').replace(/\s+/g,' ').trim();
+        if(text) exchanges.push({id:uid(),role:'teacher',text,corrections:[]});
+        continue;
+      }
+
+      // Student: extract original text + corrections
+      let origText='';
+      const corrections=[];
+
+      for(const line of lineEls){
+        // Build original: walk child nodes, include error text, skip fix text
+        let part='';
+        for(const node of line.childNodes){
+          if(node.nodeType===Node.TEXT_NODE){
+            part+=node.textContent;
+          } else if(node.nodeType===Node.ELEMENT_NODE){
+            const nc=node.className||'';
+            if(nc.includes('error')) part+=node.textContent;
+            // skip .fix spans
+          }
+        }
+        // Clean up markers like "→ correct →", "✓ correct ✓"
+        part=part.replace(/[→←✓✗]\s*correct\s*[→←✓✗]?/gi,'')
+                 .replace(/\s+/g,' ').trim();
+        if(part) origText=origText?(origText+' '+part):part;
+
+        // Extract error→fix pairs from this line
+        const errs=Array.from(line.querySelectorAll('.error'));
+        const fixes=Array.from(line.querySelectorAll('.fix'));
+        errs.forEach((errEl,i)=>{
+          const wrong=errEl.textContent.trim();
+          const fixEl=fixes[i];
+          const correct=fixEl?fixEl.textContent.replace(/^[→←✓→✓\s]+/,'').trim():'';
+          if(wrong&&correct){
+            corrections.push({wrong,correct,note:''});
+          }
+        });
+      }
+
+      // Assign notes to corrections in order
+      noteEls.forEach((noteEl,i)=>{
+        const note=noteEl.textContent.trim();
+        if(corrections[i]) corrections[i].note=note;
+        else if(corrections.length) corrections[corrections.length-1].note=note;
+      });
+
+      if(origText||corrections.length){
+        exchanges.push({id:uid(),role:'student',text:origText||'(original text)',corrections});
+      }
+      continue;
+    }
+  }
+
+  return{studentName,topic,exchanges};
+}
+
+// ── SETTINGS ─────────────────────────────────────────────────────────────
+function openSettings(){
+  document.getElementById('apiKeyInput').value=localStorage.getItem('esl_claude_key')||'';
+  openMo('settingsMo');
+}
+function saveSettings(){
+  const k=document.getElementById('apiKeyInput').value.trim();
+  if(k) localStorage.setItem('esl_claude_key',k);
+  else localStorage.removeItem('esl_claude_key');
+  closeMo('settingsMo');
+  toast(k?'API Key 已儲存':'API Key 已清除');
+}
+
+// ── AI BATCH CORRECT ──────────────────────────────────────────────────────
+let _promptExMap=[];
+
+async function batchAICorrect(){
+  const l=lesson();
+  if(!l){ toast('請先選擇課堂'); return; }
+  const stuExs=l.exchanges.filter(e=>e.role==='student'&&e.text&&e.text.trim());
+  if(!stuExs.length){ toast('沒有學生對話可分析'); return; }
+
+  const key=localStorage.getItem('esl_claude_key')||'';
+  if(!key){ showPromptGen(stuExs,l.student); return; }
+
+  const btn=document.getElementById('batchAIBtn');
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin"></span>AI 分析中...'; }
+  try{
+    const results=await callClaudeAPI(stuExs,l.student,key);
+    applyAIResults(results,l);
+  }catch(e){
+    console.error(e);
+    toast('API 失敗（'+e.message+'），改用提示詞模式');
+    showPromptGen(stuExs,l.student);
+  }finally{
+    if(btn){ btn.disabled=false; btn.innerHTML='🤖 AI 批量修正'; }
+  }
+}
+
+async function callClaudeAPI(exchanges,studentName,apiKey){
+  // Chunk to 25 sentences per call to stay within token limits
+  const chunks=[];
+  for(let i=0;i<exchanges.length;i+=25) chunks.push(exchanges.slice(i,i+25));
+  const all=[];
+  for(const chunk of chunks){
+    const payload=JSON.stringify(chunk.map(e=>({id:e.id,text:e.text})));
+    const prompt=buildPrompt(studentName,payload);
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens:4096,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+    if(!res.ok){const e=await res.json();throw new Error(e.error?.message||'HTTP '+res.status);}
+    const data=await res.json();
+    const text=data.content?.[0]?.text||'[]';
+    const m=text.match(/\[[\s\S]*\]/);
+    if(m) all.push(...JSON.parse(m[0]));
+  }
+  return all;
+}
+
+function buildPrompt(studentName,sentencesJson){
+  return `你是 ESL 英文老師，分析學生 ${studentName} 的對話，找出語法錯誤或用字不自然的表達，提供修正建議。
+
+只回傳 JSON 陣列（不要有任何其他文字或說明）：
+[{"id":"exchange_id","corrections":[{"wrong":"原文中完整的錯誤片語","correct":"正確說法","note":"一句中文說明"}]}]
+
+若句子正確無需修正，該筆 corrections 為 []。
+
+學生對話：
+${sentencesJson}`;
+}
+
+function applyAIResults(results,l){
+  let applied=0;
+  results.forEach(r=>{
+    const ex=l.exchanges.find(e=>e.id===r.id);
+    if(!ex||!r.corrections?.length) return;
+    r.corrections.forEach(c=>{
+      if(c.wrong&&c.correct&&!ex.corrections.find(x=>x.wrong===c.wrong)){
+        ex.corrections.push({wrong:c.wrong,correct:c.correct,note:c.note||''});
+        applied++;
+      }
+    });
+  });
+  save(); renderDlg();
+  toast(`AI 分析完成，套用 ${applied} 筆修正`);
+}
+
+function showPromptGen(exchanges,studentName){
+  _promptExMap=exchanges.map(e=>e.id);
+  const payload=JSON.stringify(exchanges.map(e=>({id:e.id,text:e.text})),null,2);
+  document.getElementById('promptGenText').value=buildPrompt(studentName,payload);
+  document.getElementById('promptResultInput').value='';
+  openMo('promptGenMo');
+}
+
+function copyPrompt(){
+  navigator.clipboard.writeText(document.getElementById('promptGenText').value)
+    .then(()=>toast('已複製提示詞，請貼到 Claude.ai'))
+    .catch(()=>{document.getElementById('promptGenText').select();document.execCommand('copy');toast('已複製');});
+}
+
+function applyPromptResult(){
+  const raw=document.getElementById('promptResultInput').value.trim();
+  if(!raw){ toast('請貼上 AI 回覆的 JSON'); return; }
+  try{
+    const m=raw.match(/\[[\s\S]*\]/);
+    if(!m) throw new Error('找不到 JSON 陣列');
+    const results=JSON.parse(m[0]);
+    const l=lesson(); if(!l) return;
+    // Remap numeric index (1-based) to exchange id if needed
+    const mapped=results.map(r=>{
+      if(typeof r.id==='number'||/^\d+$/.test(String(r.id))){
+        const idx=parseInt(r.id)-1;
+        return{...r,id:_promptExMap[idx]||r.id};
+      }
+      return r;
+    });
+    applyAIResults(mapped,l);
+    closeMo('promptGenMo');
+  }catch(e){ toast('解析失敗：'+e.message); }
+}
+
+// ── AUTO CORRECT (LanguageTool) ───────────────────────────────────────────
+let autoSugs=[], autoExId=null;
+
+async function autoCorr(exId){
+  const l=lesson();
+  const ex=l&&l.exchanges.find(e=>e.id===exId);
+  if(!ex) return;
+  autoExId=exId;
+
+  const btn=document.getElementById('autobtn-'+exId);
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="spin"></span>分析中...'; }
+
+  try{
+    const res=await fetch('https://api.languagetool.org/v2/check',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:'text='+encodeURIComponent(ex.text)+'&language=en-US'
+    });
+    if(!res.ok) throw new Error('API '+res.status);
+    const data=await res.json();
+
+    if(!data.matches||!data.matches.length){
+      toast('✅ 未發現明顯語法錯誤');
+      return;
+    }
+
+    autoSugs=data.matches.map(m=>{
+      const wrong=ex.text.slice(m.offset,m.offset+m.length);
+      const hasRep=m.replacements&&m.replacements.length>0;
+      return{
+        wrong,
+        correct:hasRep?m.replacements[0].value:'',
+        note:m.message,
+        hasRep,
+        sel:hasRep
+      };
+    }).filter(s=>s.wrong.trim());
+
+    document.getElementById('autoOrigText').textContent=ex.text;
+    document.getElementById('autoMoSub').textContent=`發現 ${autoSugs.length} 個建議（勾選後套用）`;
+    renderAutoSugs();
+    openMo('autoMo');
+
+  }catch(e){
+    console.error(e);
+    toast('⚠️ 自動修正暫時無法連線，請使用手動修正');
+  }finally{
+    if(btn){ btn.disabled=false; btn.innerHTML='🤖 自動修正'; }
+  }
+}
+
+function renderAutoSugs(){
+  document.getElementById('autoSugsList').innerHTML=autoSugs.map((s,i)=>`
+    <div class="auto-card${s.sel?' sel':''}${!s.hasRep?' no-rep':''}" id="ac${i}" onclick="togSug(${i})">
+      <input type="checkbox"${s.sel?' checked':''}${!s.hasRep?' disabled':''}>
+      <div class="asc-body">
+        <div class="asc-wrong">${esc(s.wrong)}${!s.hasRep?'<span style="color:var(--muted);font-style:italic;margin-left:6px">(無建議替換)</span>':''}</div>
+        ${s.correct?`<div class="asc-correct">→ ${esc(s.correct)}</div>`:''}
+        <div class="asc-note">${esc(s.note)}</div>
+      </div>
+    </div>`).join('');
+}
+
+function togSug(i){
+  if(!autoSugs[i].hasRep) return;
+  autoSugs[i].sel=!autoSugs[i].sel;
+  const card=document.getElementById('ac'+i);
+  card.classList.toggle('sel',autoSugs[i].sel);
+  card.querySelector('input').checked=autoSugs[i].sel;
+}
+
+function applyAuto(){
+  const l=lesson();
+  const ex=l&&l.exchanges.find(e=>e.id===autoExId);
+  if(!ex) return;
+  const toApply=autoSugs.filter(s=>s.sel&&s.hasRep&&s.correct);
+  if(!toApply.length){ toast('請至少勾選一個修正'); return; }
+  toApply.forEach(s=>{
+    if(!ex.corrections.find(c=>c.wrong===s.wrong))
+      ex.corrections.push({wrong:s.wrong,correct:s.correct,note:s.note});
+  });
+  save(); renderDlg(); closeMo('autoMo');
+  toast(`已套用 ${toApply.length} 個修正`);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+load(); renderSel(); renderDlg(); renderPractice();
+</script>
+</body>
+</html>
