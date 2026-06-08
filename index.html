@@ -55,6 +55,14 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .ex-section{text-align:center;margin:24px 0 16px}
 .ex-section-label{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:3px 14px;border:1px solid var(--border);border-radius:20px;background:var(--surface)}
 
+.vocab-section{margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.vocab-sec-hd{font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg)}
+.vocab-grid-ui{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;padding:10px}
+.vocab-card-ui{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px}
+.vocab-card-ui .vw{font-weight:600;font-size:.85rem;color:var(--text)}
+.vocab-card-ui .vp{font-size:.72rem;color:var(--accent);margin:1px 0}
+.vocab-card-ui .vd{font-size:.72rem;color:var(--muted);margin-top:2px;line-height:1.45}
+
 .ex-role{font-size:.72rem;font-weight:600;margin-bottom:4px;letter-spacing:.02em}
 .ex-role.teacher{color:var(--muted)}
 .ex-role.student{color:var(--accent)}
@@ -567,7 +575,7 @@ function createLesson(){
   const t=document.getElementById('nlTitle').value.trim();
   const s=document.getElementById('nlStudent').value.trim()||'Student';
   const d=document.getElementById('nlDate').value||new Date().toISOString().slice(0,10);
-  const l={ id:uid(), title:t||'未命名課堂', student:s, date:d, exchanges:[] };
+  const l={ id:uid(), title:t||'未命名課堂', student:s, date:d, exchanges:[], vocab:[] };
   D.lessons.push(l); D.activeId=l.id; save();
   closeMo('newLessonMo');
   renderSel(); renderDlg();
@@ -734,12 +742,25 @@ function renderDlg(){
   document.getElementById('lessonDate').textContent=l.date;
   bar.style.display='flex';
 
+  const vocabHtml=(l.vocab&&l.vocab.length)
+    ?`<div class="vocab-section">
+        <div class="vocab-sec-hd">本課詞彙 Key Vocabulary</div>
+        <div class="vocab-grid-ui">${l.vocab.map(v=>`
+          <div class="vocab-card-ui">
+            <div class="vw">${esc(v.word)}</div>
+            ${v.ph?`<div class="vp">${esc(v.ph)}</div>`:''}
+            ${v.def?`<div class="vd">${esc(v.def)}</div>`:''}
+          </div>`).join('')}
+        </div>
+      </div>`
+    :'';
+
   if(!l.exchanges.length){
-    dlg.innerHTML='<div class="empty-dlg"><div class="ei">💬</div>點下方按鈕開始新增對話</div>';
+    dlg.innerHTML=vocabHtml+'<div class="empty-dlg"><div class="ei">💬</div>點下方按鈕開始新增對話</div>';
     return;
   }
 
-  dlg.innerHTML=l.exchanges.map(ex=>{
+  dlg.innerHTML=vocabHtml+l.exchanges.map(ex=>{
     if(ex.role==='section')
       return `<div class="ex-section"><span class="ex-section-label">${esc(ex.title)}</span></div>`;
 
@@ -1098,7 +1119,8 @@ function runHTMLImport(){
     title:parsed.topic,
     student:parsed.studentName,
     date:new Date().toISOString().slice(0,10),
-    exchanges:parsed.exchanges
+    exchanges:parsed.exchanges,
+    vocab:parsed.vocab||[]
   };
   D.lessons.push(l); D.activeId=l.id;
   save(); renderSel(); renderDlg(); closeMo('htmlImportMo');
@@ -1119,11 +1141,20 @@ function parseNewFormat(wrap){
     if(tM) topic=tM[1].trim().replace(/\s*·.*$/,'').trim();
     if(sM||tM) break;
   }
-  const exchanges=[];
+  const exchanges=[], vocab=[];
   for(const el of wrap.children){
     const tag=el.tagName; const cls=el.className||'';
     if(tag==='HR'||tag==='H2'||tag==='P') continue;
-    if(/\blegend\b/.test(cls)||/\bvocab/.test(cls)) continue;
+    if(/\blegend\b/.test(cls)) continue;
+    if(/\bvocab-grid\b/.test(cls)){
+      for(const card of el.querySelectorAll('.vocab-card')){
+        const word=(card.querySelector('.vocab-word')||{}).textContent||'';
+        const ph=(card.querySelector('.vocab-ph')||{}).textContent||'';
+        const def=(card.querySelector('.vocab-def')||{}).textContent||'';
+        if(word.trim()) vocab.push({word:word.trim(),ph:ph.trim(),def:def.trim()});
+      }
+      continue;
+    }
     // Section header
     if(/\bsec\b/.test(cls)){
       const clone=el.cloneNode(true);
@@ -1181,7 +1212,7 @@ function parseNewFormat(wrap){
       }
     }
   }
-  return{studentName,topic,exchanges};
+  return{studentName,topic,exchanges,vocab};
 }
 
 function parseClaudeHTML(htmlStr){
