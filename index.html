@@ -58,10 +58,12 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .vocab-section{margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
 .vocab-sec-hd{font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg)}
 .vocab-grid-ui{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;padding:10px}
-.vocab-card-ui{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px}
+.vocab-card-ui{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;gap:2px}
 .vocab-card-ui .vw{font-weight:600;font-size:.85rem;color:var(--text)}
-.vocab-card-ui .vp{font-size:.72rem;color:var(--accent);margin:1px 0}
-.vocab-card-ui .vd{font-size:.72rem;color:var(--muted);margin-top:2px;line-height:1.45}
+.vocab-card-ui .vp{font-size:.72rem;color:var(--accent)}
+.vocab-card-ui .vd{font-size:.72rem;color:var(--muted);line-height:1.45}
+.vocab-card-ui .vadd{margin-top:6px;align-self:flex-start;font-size:.7rem;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);cursor:pointer}
+.vocab-card-ui .vadd:hover{background:var(--surface);color:var(--text)}
 
 .ex-role{font-size:.72rem;font-weight:600;margin-bottom:4px;letter-spacing:.02em}
 .ex-role.teacher{color:var(--muted)}
@@ -686,6 +688,10 @@ function corrAddToPractice(){
   addPracticeText(corrected(ex), corrExId);
 }
 
+function addVocabToPractice(word){
+  addPracticeText(word, 'vocab');
+}
+
 function addExToPractice(exId){
   const l=lesson(); if(!l) return;
   const ex=l.exchanges.find(e=>e.id===exId); if(!ex) return;
@@ -750,6 +756,7 @@ function renderDlg(){
             <div class="vw">${esc(v.word)}</div>
             ${v.ph?`<div class="vp">${esc(v.ph)}</div>`:''}
             ${v.def?`<div class="vd">${esc(v.def)}</div>`:''}
+            <button class="vadd" onclick="addVocabToPractice(${JSON.stringify(v.word)})">＋ 加入練習</button>
           </div>`).join('')}
         </div>
       </div>`
