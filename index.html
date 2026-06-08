@@ -688,8 +688,10 @@ function corrAddToPractice(){
   addPracticeText(corrected(ex), corrExId);
 }
 
-function addVocabToPractice(word){
-  addPracticeText(word, 'vocab');
+function addVocabToPractice(idx){
+  const l=lesson(); if(!l||!l.vocab) return;
+  const v=l.vocab[idx]; if(!v) return;
+  addPracticeText(v.word, 'vocab');
 }
 
 function addExToPractice(exId){
@@ -751,12 +753,12 @@ function renderDlg(){
   const vocabHtml=(l.vocab&&l.vocab.length)
     ?`<div class="vocab-section">
         <div class="vocab-sec-hd">本課詞彙 Key Vocabulary</div>
-        <div class="vocab-grid-ui">${l.vocab.map(v=>`
+        <div class="vocab-grid-ui">${l.vocab.map((v,i)=>`
           <div class="vocab-card-ui">
             <div class="vw">${esc(v.word)}</div>
             ${v.ph?`<div class="vp">${esc(v.ph)}</div>`:''}
             ${v.def?`<div class="vd">${esc(v.def)}</div>`:''}
-            <button class="vadd" onclick="addVocabToPractice(${JSON.stringify(v.word)})">＋ 加入練習</button>
+            <button class="vadd" onclick="addVocabToPractice(${i})">＋ 加入練習</button>
           </div>`).join('')}
         </div>
       </div>`
