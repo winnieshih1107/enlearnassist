@@ -423,17 +423,32 @@ Winnie: Yes, my aunt. they control the cancer as well."></textarea>
 <div class="modal-overlay" id="htmlImportMo">
   <div class="modal">
     <div class="modal-title">📥 匯入 Claude 修正 HTML</div>
-    <div class="modal-sub">將 Claude 回傳的 HTML 原始碼全選複製，貼到下方即可一次建立課堂、對話與所有修正</div>
+    <div class="modal-sub">選擇本機 .html 檔案，或將 Claude 回傳的 HTML 貼到下方，即可一次建立課堂、對話與所有修正</div>
+
+    <!-- 檔案選擇 -->
+    <input type="file" id="htmlFileInput" accept=".html" style="display:none" onchange="handleHtmlFileSelect(this)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <button class="btn btn-ghost" style="flex-shrink:0" onclick="document.getElementById('htmlFileInput').click()">📂 選擇 .html 檔案</button>
+      <span id="htmlFileName" style="font-size:.75rem;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">尚未選擇檔案</span>
+    </div>
+
+    <!-- 分隔線 -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:.72rem;color:var(--color-text-secondary)">
+      <hr style="flex:1;border:none;border-top:1px solid var(--color-border-secondary)">
+      或直接貼上 HTML
+      <hr style="flex:1;border:none;border-top:1px solid var(--color-border-secondary)">
+    </div>
+
     <div class="f-field">
       <label class="f-label">Claude 回傳的 HTML 原始碼</label>
-      <textarea class="f-textarea" id="htmlImportInput" style="min-height:200px;font-size:.72rem;font-family:monospace"
+      <textarea class="f-textarea" id="htmlImportInput" style="min-height:160px;font-size:.72rem;font-family:monospace"
         placeholder="將 Claude 回傳的整段 HTML 貼到這裡...
 （包含 &lt;style&gt; 區塊和 &lt;div class=&quot;transcript-wrap&quot;&gt; 的完整內容）"></textarea>
     </div>
     <div style="background:#f0f4ff;border:1px solid #c5d0f7;border-radius:8px;padding:10px 14px;font-size:.72rem;color:#3a52c4;margin-bottom:12px">
       💡 <strong>如何取得 HTML？</strong><br>
-      在 Claude.ai 回覆中，點右上角「···」→「Copy as HTML」；
-      或對回覆右鍵 → 檢視原始碼，複製 <code>&lt;div class="transcript-wrap"&gt;</code> 的區塊。
+      ① 直接選擇從 Claude 下載的 <code>.html</code> 檔案（推薦）<br>
+      ② 或在 Claude.ai 回覆中，點右上角「···」→「Copy as HTML」後貼到上方文字框
     </div>
     <div class="f-actions">
       <button class="btn btn-ghost" onclick="closeMo('htmlImportMo')">取消</button>
@@ -1114,12 +1129,26 @@ function toast(msg){
 // ── CLAUDE HTML IMPORT ───────────────────────────────────────────────────
 function openHTMLImport(){
   document.getElementById('htmlImportInput').value='';
+  document.getElementById('htmlFileInput').value='';
+  document.getElementById('htmlFileName').textContent='尚未選擇檔案';
   openMo('htmlImportMo');
+}
+
+function handleHtmlFileSelect(input){
+  const file=input.files[0];
+  if(!file) return;
+  document.getElementById('htmlFileName').textContent=file.name;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    document.getElementById('htmlImportInput').value=e.target.result;
+  };
+  reader.onerror=function(){ toast('檔案讀取失敗，請重試'); };
+  reader.readAsText(file,'UTF-8');
 }
 
 function runHTMLImport(){
   const raw=document.getElementById('htmlImportInput').value.trim();
-  if(!raw){ toast('請貼上 HTML'); return; }
+  if(!raw){ toast('請選擇 .html 檔案或貼上 HTML'); return; }
   const parsed=parseClaudeHTML(raw);
   if(!parsed||!parsed.exchanges.length){ toast('解析失敗：找不到對話內容，請確認 HTML 格式正確'); return; }
 
