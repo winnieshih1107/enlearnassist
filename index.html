@@ -50,7 +50,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .dialogue::-webkit-scrollbar{width:4px}
 .dialogue::-webkit-scrollbar-thumb{background:#ccc;border-radius:4px}
 
-.exchange{margin-bottom:18px}
+.exchange{margin-bottom:18px;position:relative;transition:padding-left .15s}
 
 .ex-section{text-align:center;margin:24px 0 16px}
 .ex-section-label{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:3px 14px;border:1px solid var(--border);border-radius:20px;background:var(--surface)}
@@ -58,7 +58,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .vocab-section{margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
 .vocab-sec-hd{font-size:.68rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg)}
 .vocab-grid-ui{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;padding:10px}
-.vocab-card-ui{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;gap:2px}
+.vocab-card-ui{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;gap:2px;position:relative}
 .vocab-card-ui .vw{font-weight:600;font-size:.85rem;color:var(--text)}
 .vocab-card-ui .vp{font-size:.72rem;color:var(--accent)}
 .vocab-card-ui .vd{font-size:.72rem;color:var(--muted);line-height:1.45}
@@ -79,6 +79,13 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 
 .ex-actions{display:flex;gap:6px;margin-top:8px;opacity:0;transition:opacity .18s;flex-wrap:wrap}
 .exchange:hover .ex-actions{opacity:1}
+
+/* ── MULTI-SELECT (加入練習) ── */
+.sel-chk{position:absolute;width:17px;height:17px;cursor:pointer;accent-color:var(--accent);z-index:2}
+.sel-chk.pos-left{left:2px;top:2px}
+.sel-chk.pos-tr{right:8px;top:8px}
+.exchange.sel-mode{padding-left:28px}
+.vocab-card-ui.sel-mode{padding-right:26px}
 
 /* ── AUTO CORRECT ── */
 .btn-auto{background:#f0f4ff;border:1px solid #c5d0f7;color:#3a52c4}
@@ -240,14 +247,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
     <div class="dialogue" id="dialogue">
       <div class="empty-dlg"><div class="ei">📝</div>新增課堂後開始記錄對話</div>
     </div>
-    <div class="add-bar" id="addBar" style="display:none">
-      <button class="btn btn-ghost btn-sm" onclick="openAddEx('teacher')">＋ Teacher</button>
-      <button class="btn btn-ghost btn-sm" onclick="openAddEx('student')">＋ Student</button>
-      <button class="btn btn-ghost btn-sm" onclick="openAddEx('section')">＋ 段落標題</button>
-      <span style="flex:1"></span>
-      <button class="btn btn-auto btn-sm" id="batchAIBtn" onclick="batchAICorrect()">🤖 AI 批量修正</button>
-      <button class="btn btn-ghost btn-sm" onclick="openSettings()" title="設定 Claude API Key">⚙</button>
-    </div>
+    <div class="add-bar" id="addBar" style="display:none"></div>
   </div>
 
   <!-- RIGHT: PRACTICE -->
@@ -752,29 +752,32 @@ function renderSel(){
 function renderDlg(){
   const l=lesson();
   const dlg=document.getElementById('dialogue');
-  const bar=document.getElementById('addBar');
 
   if(!l){
     document.getElementById('lessonTopic').textContent='尚未選擇課堂';
     document.getElementById('lessonDate').textContent='請從上方選擇或新增課堂';
-    bar.style.display='none';
+    renderAddBar();
     dlg.innerHTML='<div class="empty-dlg"><div class="ei">📝</div>新增課堂後開始記錄對話</div>';
     return;
   }
   document.getElementById('lessonTopic').textContent=`Topic: ${l.title} · Student: ${l.student}`;
   document.getElementById('lessonDate').textContent=l.date;
-  bar.style.display='flex';
+  renderAddBar();
 
   const vocabHtml=(l.vocab&&l.vocab.length)
     ?`<div class="vocab-section">
         <div class="vocab-sec-hd">本課詞彙 Key Vocabulary</div>
-        <div class="vocab-grid-ui">${l.vocab.map((v,i)=>`
-          <div class="vocab-card-ui">
+        <div class="vocab-grid-ui">${l.vocab.map((v,i)=>{
+          const key='vocab:'+i;
+          const chk=selectMode?`<input type="checkbox" class="sel-chk pos-tr" ${selectedSet.has(key)?'checked':''} onchange="toggleSelectItem('${key}',this.checked)">`:'';
+          return `<div class="vocab-card-ui${selectMode?' sel-mode':''}">
+            ${chk}
             <div class="vw">${esc(v.word)}</div>
             ${v.ph?`<div class="vp">${esc(v.ph)}</div>`:''}
             ${v.def?`<div class="vd">${esc(v.def)}</div>`:''}
             <button class="vadd" onclick="addVocabToPractice(${i})">＋ 加入練習</button>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
         </div>
       </div>`
     :'';
@@ -802,7 +805,10 @@ function renderDlg(){
       :`<button class="btn btn-ghost btn-sm" onclick="addExToPractice('${ex.id}')">＋ 加入練習</button>
         <button class="ibtn del btn-sm" onclick="delEx('${ex.id}')" title="刪除">✕</button>`;
 
-    return `<div class="exchange" id="ex-${ex.id}">
+    const chk=selectMode?`<input type="checkbox" class="sel-chk pos-left" ${selectedSet.has(ex.id)?'checked':''} onchange="toggleSelectItem('${ex.id}',this.checked)">`:'';
+
+    return `<div class="exchange${selectMode?' sel-mode':''}" id="ex-${ex.id}">
+      ${chk}
       <div class="ex-role ${roleClass}">${esc(name)}</div>
       <div class="ex-body">
         <div class="ex-text">${textHtml}</div>
@@ -811,6 +817,80 @@ function renderDlg(){
       <div class="ex-actions">${actions}</div>
     </div>`;
   }).join('');
+}
+
+// ── MULTI-SELECT (加入練習) ──────────────────────────────────────────────
+let selectMode=false;
+let selectedSet=new Set();
+
+function setSelectMode(on){
+  selectMode=on;
+  selectedSet.clear();
+  renderDlg();
+}
+function toggleSelectMode(){ setSelectMode(!selectMode); }
+
+function toggleSelectItem(key,checked){
+  if(checked) selectedSet.add(key); else selectedSet.delete(key);
+  renderAddBar();
+}
+
+function selectAllItems(){
+  const l=lesson(); if(!l) return;
+  (l.vocab||[]).forEach((_,i)=>selectedSet.add('vocab:'+i));
+  l.exchanges.forEach(ex=>{ if(ex.role!=='section') selectedSet.add(ex.id); });
+  renderDlg();
+}
+function deselectAllItems(){ selectedSet.clear(); renderDlg(); }
+
+function addSelectedToPractice(){
+  const l=lesson();
+  if(!l||!selectedSet.size){ toast('尚未勾選任何項目'); return; }
+  let added=0, dup=0;
+  selectedSet.forEach(key=>{
+    let text=null, sourceId=key;
+    if(key.startsWith('vocab:')){
+      const v=l.vocab&&l.vocab[Number(key.slice(6))];
+      if(v){ text=v.word; sourceId='vocab'; }
+    } else {
+      const ex=l.exchanges.find(e=>e.id===key);
+      if(ex&&ex.role!=='section'){ text=corrected(ex); sourceId=ex.id; }
+    }
+    if(!text) return;
+    if(D.practice.find(x=>x.text===text)){ dup++; return; }
+    D.practice.push({id:uid(),text,sourceId,done:false,plays:0,addedAt:new Date().toISOString().slice(0,10)});
+    added++;
+  });
+  if(added) save();
+  renderPractice();
+  setSelectMode(false);
+  if(added&&dup) toast(`已加入 ${added} 句到練習清單（${dup} 句已存在，已略過）`);
+  else if(added) toast(`已加入 ${added} 句到練習清單`);
+  else toast('勾選的語句皆已在練習清單中');
+}
+
+function renderAddBar(){
+  const bar=document.getElementById('addBar');
+  if(!lesson()){ bar.style.display='none'; return; }
+  bar.style.display='flex';
+  if(selectMode){
+    bar.innerHTML=`
+      <button class="btn btn-ghost btn-sm" onclick="selectAllItems()">全選</button>
+      <button class="btn btn-ghost btn-sm" onclick="deselectAllItems()">取消全選</button>
+      <span style="flex:1"></span>
+      <span style="font-size:.72rem;color:var(--muted);align-self:center">已選 <strong>${selectedSet.size}</strong> 項</span>
+      <button class="btn btn-green btn-sm" onclick="addSelectedToPractice()">＋ 加入練習</button>
+      <button class="btn btn-ghost btn-sm" onclick="setSelectMode(false)">取消</button>`;
+  } else {
+    bar.innerHTML=`
+      <button class="btn btn-ghost btn-sm" onclick="openAddEx('teacher')">＋ Teacher</button>
+      <button class="btn btn-ghost btn-sm" onclick="openAddEx('student')">＋ Student</button>
+      <button class="btn btn-ghost btn-sm" onclick="openAddEx('section')">＋ 段落標題</button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleSelectMode()">☑ 多選加入練習</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-auto btn-sm" id="batchAIBtn" onclick="batchAICorrect()">🤖 AI 批量修正</button>
+      <button class="btn btn-ghost btn-sm" onclick="openSettings()" title="設定 Claude API Key">⚙</button>`;
+  }
 }
 
 // ── PRACTICE ──────────────────────────────────────────────────────────────
