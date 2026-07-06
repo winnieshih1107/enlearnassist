@@ -171,6 +171,10 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .todo-item.done .t-check{background:var(--green);border-color:var(--green)}
 .t-check-icon{display:none;color:#fff;font-size:10px;font-weight:800}
 .todo-item.done .t-check-icon{display:block}
+.export-cb{width:13px;height:13px;min-width:13px;margin-top:4px;cursor:pointer;accent-color:var(--accent);flex-shrink:0}
+.todo-item.export-sel{border-color:var(--accent)}
+.export-ctrl-bar{display:none;align-items:center;gap:8px;padding:6px 10px;background:color-mix(in srgb,var(--accent) 10%,var(--surface));border:1px solid var(--accent);border-radius:8px;margin-bottom:8px;font-size:.72rem}
+.export-ctrl-bar.active{display:flex}
 .t-main{flex:1;min-width:0}
 .todo-text{font-size:.8rem;line-height:1.5;word-break:break-word}
 .todo-meta{font-size:.65rem;color:var(--muted);margin-top:2px}
@@ -276,6 +280,17 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
             <button class="sp-chip" data-r="1.6" onclick="setRate(this)">1.6x</button>
           </div>
         </div>
+        <div class="speed-row" style="margin-bottom:5px">
+          <span class="v-label">🌐 音檔</span>
+          <div style="display:flex;gap:14px;font-size:.74rem">
+            <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
+              <input type="radio" name="audioLang" value="en" checked onchange="setAudioLang(this.value)"> 英文
+            </label>
+            <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
+              <input type="radio" name="audioLang" value="zh-en" onchange="setAudioLang(this.value)"> 中文＋英文
+            </label>
+          </div>
+        </div>
         <div class="divider"></div>
         <div class="prog-lbl">
           <span>練習進度</span>
@@ -286,6 +301,17 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
           <button class="ftab active" data-f="all" onclick="setFilter(this)">全部</button>
           <button class="ftab" data-f="pending" onclick="setFilter(this)">待練習</button>
           <button class="ftab" data-f="done" onclick="setFilter(this)">已完成</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.72rem">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none">
+            <input type="checkbox" id="selectAllExportCb" onchange="toggleSelectAll(this.checked)"> 全選（匯出用）
+          </label>
+          <span id="exportSelCount" style="color:var(--muted)">（未選則全部匯出）</span>
+        </div>
+        <div class="export-ctrl-bar" id="exportCtrlBar">
+          <span id="exportCtrlMsg" style="flex:1">準備中...</span>
+          <button id="exportPauseBtn" onclick="toggleExportPause()" style="padding:2px 9px;border-radius:5px;font-size:.72rem;cursor:pointer;background:var(--surface2);border:1px solid var(--border);color:var(--text)">⏸ 暫停</button>
+          <button onclick="stopExport()" style="padding:2px 9px;border-radius:5px;font-size:.72rem;cursor:pointer;background:#e53e3e;border:none;color:#fff">⏹ 停止</button>
         </div>
         <div class="todo-list" id="todoList">
           <div class="empty-hint">從左側對話記錄點「＋ 加入練習」</div>
@@ -302,6 +328,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
     <div class="panel-ft">
       <button class="btn btn-ghost btn-sm" onclick="playAll()">▶ 全部播放</button>
       <button class="btn btn-ghost btn-sm" onclick="clearDone()">清除已完成</button>
+      <button class="btn btn-sm" style="background:#e53e3e;color:#fff;border:none" onclick="deleteSelectedPractice()">🗑 刪除選取</button>
       <button class="btn btn-ghost btn-sm" onclick="exportTSV()">匯出清單</button>
       <button class="btn btn-ghost btn-sm" id="exportAudioBtn" onclick="exportAudio()">🎵 匯出音檔</button>
     </div>
@@ -560,7 +587,24 @@ Winnie: Yes, my aunt. they control the cancer as well."></textarea>
     </div>
     <div class="f-actions">
       <button class="btn btn-ghost" onclick="closeMo('exportGuideMo')">取消</button>
-      <button class="btn btn-primary" onclick="startCaptureExport()">開始錄製</button>
+      <button class="btn btn-primary" onclick="startCaptureRecording()">開始錄製</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Chinese Translation -->
+<div class="modal-overlay" id="translateMo">
+  <div class="modal">
+    <div class="modal-title">🇹🇼 中文翻譯</div>
+    <div class="modal-sub">匯出時每句先播中文再播英文；可手動輸入或用 Claude 一鍵翻譯</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <button class="btn btn-auto btn-sm" id="claudeTransBtn" onclick="claudeTranslateAll()">🤖 Claude 一鍵翻譯</button>
+      <span style="font-size:.7rem;color:var(--muted)">需 API Key（⚙ 設定）</span>
+    </div>
+    <div id="translateList" style="display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto;margin-bottom:12px"></div>
+    <div class="f-actions">
+      <button class="btn btn-ghost" onclick="closeMo('translateMo')">取消</button>
+      <button class="btn btn-primary" onclick="saveTransAndExport()">儲存並錄製音檔</button>
     </div>
   </div>
 </div>
@@ -574,6 +618,7 @@ let D = { lessons:[], activeId:null, practice:[], plays:0 };
 let filter='all', rate=1.0, audio=null, playingId=null;
 let playingAll=false, allQueue=[], allIdx=0;
 let corrExId=null; // exchange being edited in correction modal
+let exportSel=new Set(), exportPaused=false, exportStop=false;
 
 // ── STORAGE ───────────────────────────────────────────────────────────────
 function load(){ try{ const r=localStorage.getItem(SK); if(r) D=JSON.parse(r); }catch(e){} }
@@ -700,7 +745,7 @@ function delCorr(exId, idx){
 function corrAddToPractice(){
   const l=lesson();
   const ex=l.exchanges.find(e=>e.id===corrExId); if(!ex) return;
-  addPracticeText(corrected(ex), corrExId);
+  addPracticeText(corrected(ex), corrExId, ex.zh||'');
 }
 
 function addVocabToPractice(idx){
@@ -712,7 +757,7 @@ function addVocabToPractice(idx){
 function addExToPractice(exId){
   const l=lesson(); if(!l) return;
   const ex=l.exchanges.find(e=>e.id===exId); if(!ex) return;
-  addPracticeText(corrected(ex), exId);
+  addPracticeText(corrected(ex), exId, ex.zh||'');
 }
 
 function corrected(ex){
@@ -795,6 +840,7 @@ function renderDlg(){
     const name=isStu?l.student:'Teacher';
     const roleClass=isStu?'student':'teacher';
     const textHtml=isStu?renderWithCorr(ex.text,ex.corrections):esc(ex.text);
+    const zhHtml=ex.zh?`<div style="font-size:.78rem;color:var(--muted);margin-top:3px;font-style:italic">${esc(ex.zh)}</div>`:'';
     const notesHtml=isStu&&ex.corrections&&ex.corrections.some(c=>c.note)
       ?`<div class="ex-notes">${ex.corrections.filter(c=>c.note).map(c=>`<div class="ex-note">${esc(c.note)}</div>`).join('')}</div>`:'';
     const actions=isStu
@@ -812,6 +858,7 @@ function renderDlg(){
       <div class="ex-role ${roleClass}">${esc(name)}</div>
       <div class="ex-body">
         <div class="ex-text">${textHtml}</div>
+        ${zhHtml}
         ${notesHtml}
       </div>
       <div class="ex-actions">${actions}</div>
@@ -848,17 +895,17 @@ function addSelectedToPractice(){
   if(!l||!selectedSet.size){ toast('尚未勾選任何項目'); return; }
   let added=0, dup=0;
   selectedSet.forEach(key=>{
-    let text=null, sourceId=key;
+    let text=null, sourceId=key, zh='';
     if(key.startsWith('vocab:')){
       const v=l.vocab&&l.vocab[Number(key.slice(6))];
       if(v){ text=v.word; sourceId='vocab'; }
     } else {
       const ex=l.exchanges.find(e=>e.id===key);
-      if(ex&&ex.role!=='section'){ text=corrected(ex); sourceId=ex.id; }
+      if(ex&&ex.role!=='section'){ text=corrected(ex); sourceId=ex.id; zh=ex.zh||''; }
     }
     if(!text) return;
     if(D.practice.find(x=>x.text===text)){ dup++; return; }
-    D.practice.push({id:uid(),text,sourceId,done:false,plays:0,addedAt:new Date().toISOString().slice(0,10)});
+    D.practice.push({id:uid(),text,zh,sourceId,done:false,plays:0,addedAt:new Date().toISOString().slice(0,10)});
     added++;
   });
   if(added) save();
@@ -880,6 +927,7 @@ function renderAddBar(){
       <span style="flex:1"></span>
       <span style="font-size:.72rem;color:var(--muted);align-self:center">已選 <strong>${selectedSet.size}</strong> 項</span>
       <button class="btn btn-green btn-sm" onclick="addSelectedToPractice()">＋ 加入練習</button>
+      <button class="btn btn-sm" style="background:#e53e3e;color:#fff;border:none" onclick="deleteSelectedDlg()">🗑 清除選取</button>
       <button class="btn btn-ghost btn-sm" onclick="setSelectMode(false)">取消</button>`;
   } else {
     bar.innerHTML=`
@@ -893,10 +941,25 @@ function renderAddBar(){
   }
 }
 
+function deleteSelectedDlg(){
+  const l=lesson();
+  if(!l||!selectedSet.size){ toast('尚未勾選任何項目'); return; }
+  const n=selectedSet.size;
+  const exchIds=new Set();
+  const vocabIndices=new Set();
+  selectedSet.forEach(key=>{
+    if(key.startsWith('vocab:')) vocabIndices.add(Number(key.slice(6)));
+    else exchIds.add(key);
+  });
+  if(exchIds.size) l.exchanges=l.exchanges.filter(e=>!exchIds.has(e.id));
+  if(vocabIndices.size&&l.vocab) l.vocab=l.vocab.filter((_,i)=>!vocabIndices.has(i));
+  save(); setSelectMode(false); renderDlg(); toast(`已刪除 ${n} 項`);
+}
+
 // ── PRACTICE ──────────────────────────────────────────────────────────────
-function addPracticeText(text, sourceId){
+function addPracticeText(text, sourceId, zh=''){
   if(D.practice.find(x=>x.text===text)){ toast('此語句已在練習清單中'); return; }
-  D.practice.push({id:uid(),text,sourceId,done:false,plays:0,addedAt:new Date().toISOString().slice(0,10)});
+  D.practice.push({id:uid(),text,zh:zh||'',sourceId,done:false,plays:0,addedAt:new Date().toISOString().slice(0,10)});
   save(); renderPractice(); toast('已加入練習清單');
 }
 
@@ -930,12 +993,14 @@ function renderPractice(){
   if(!items.length){ list.innerHTML='<div class="empty-hint">此篩選條件下沒有項目</div>'; return; }
 
   list.innerHTML=items.map(item=>`
-    <div class="todo-item ${item.done?'done':''}" id="ti-${item.id}">
+    <div class="todo-item ${item.done?'done':''}${exportSel.has(item.id)?' export-sel':''}" id="ti-${item.id}">
+      <input type="checkbox" class="export-cb" id="ecb-${item.id}" ${exportSel.has(item.id)?'checked':''} onchange="toggleExportSel('${item.id}',this.checked)">
       <div class="t-check" onclick="toggleDone('${item.id}')">
         <span class="t-check-icon">✓</span>
       </div>
       <div class="t-main">
         <div class="todo-text">${esc(item.text)}</div>
+        ${item.zh?`<div style="font-size:.72rem;color:var(--muted);font-style:italic;margin-top:1px">${esc(item.zh)}</div>`:''}
         <div class="todo-meta">${item.addedAt}${item.plays?` · 播放 ${item.plays} 次`:''}</div>
       </div>
       <div class="t-acts">
@@ -960,6 +1025,14 @@ function delItem(id){
 function clearDone(){
   const n=D.practice.filter(x=>x.done).length; if(!n){ toast('沒有已完成的項目'); return; }
   D.practice=D.practice.filter(x=>!x.done); save(); renderPractice(); toast(`已清除 ${n} 個`);
+}
+function deleteSelectedPractice(){
+  if(!exportSel.size){ toast('尚未勾選任何項目'); return; }
+  const n=exportSel.size;
+  D.practice=D.practice.filter(x=>!exportSel.has(x.id));
+  exportSel.clear(); updateSelCount();
+  const cb=document.getElementById('selectAllExportCb'); if(cb) cb.checked=false;
+  save(); renderPractice(); toast(`已刪除 ${n} 項`);
 }
 function exportTSV(){
   if(!D.practice.length){ toast('清單是空的'); return; }
@@ -1026,7 +1099,24 @@ function setRate(el){
 }
 
 // ── IMPORT ────────────────────────────────────────────────────────────────
-let pendingLines=[], pendingStudent='Winnie', lineRoles=[];
+let pendingLines=[], pendingZhLines=[], pendingStudent='Winnie', lineRoles=[];
+
+function detectAlternatingZhEn(lines){
+  if(lines.length<2) return null;
+  const zhRatio=l=>(l.match(/[一-鿿]/g)||[]).length/Math.max(l.replace(/\s/g,'').length,1);
+  const total2=Math.floor(lines.length/2);
+  if(total2<1) return null;
+  let enOk=0,zhOk=0;
+  for(let i=0;i<lines.length;i+=2){
+    if(zhRatio(lines[i])<0.1) enOk++;
+    if(i+1<lines.length&&zhRatio(lines[i+1])>0.25) zhOk++;
+  }
+  if(enOk/total2<0.8||zhOk/total2<0.8) return null;
+  const pairs=[];
+  for(let i=0;i<lines.length;i+=2)
+    pairs.push({en:lines[i],zh:i+1<lines.length?lines[i+1]:''});
+  return pairs;
+}
 
 function smartAssign(lines, studentName){
   // Short filler words often said by student (responses)
@@ -1106,11 +1196,17 @@ function runImport(){
     save(); renderSel(); renderDlg(); closeMo('importMo');
     toast(`已匯入 ${added} 條對話`);
   } else {
-    // No labels → show role assignment modal
-    pendingLines=lines;
+    // No labels → check for alternating EN/ZH format first
+    const pairs=detectAlternatingZhEn(lines);
+    if(pairs){
+      pendingLines=pairs.map(p=>p.en);
+      pendingZhLines=pairs.map(p=>p.zh);
+    } else {
+      pendingLines=lines;
+      pendingZhLines=[];
+    }
     pendingStudent=studentName;
-    // Smart auto-detect roles
-    lineRoles=smartAssign(lines, studentName);
+    lineRoles=smartAssign(pendingLines,studentName);
     renderLineRoles();
     closeMo('importMo');
     openMo('lineRoleMo');
@@ -1130,20 +1226,22 @@ function renderLineRoles(){
   const tN=lineRoles.filter(r=>r==='teacher').length;
   const sN=lineRoles.filter(r=>r==='student').length;
   const skN=lineRoles.filter(r=>r==='skip').length;
-  // Update sub text with stats
   const sub=document.getElementById('lineRoleMoSub');
-  if(sub) sub.textContent=`共 ${pendingLines.length} 行 · Teacher ${tN} · Student ${sN} · 略過 ${skN}｜可調整後確認匯入`;
+  const hasZh=pendingZhLines.some(z=>z);
+  if(sub) sub.textContent=`共 ${pendingLines.length} 行 · Teacher ${tN} · Student ${sN} · 略過 ${skN}${hasZh?' · 含中文翻譯配對':''}｜可調整後確認匯入`;
 
   document.getElementById('lineRoleList').innerHTML=pendingLines.map((text,i)=>{
     const r=lineRoles[i];
     const rowClass='lr-row '+(r==='skip'?'lr-skip':r==='teacher'?'lr-t':'lr-s');
+    const zh=pendingZhLines[i]||'';
+    const zhTag=zh?`<div style="font-size:.68rem;color:var(--muted);margin-top:2px;font-style:italic">${esc(zh.slice(0,40))}${zh.length>40?'…':''}</div>`:'';
     return`<div class="${rowClass}" id="lr-${i}">
       <div class="lr-btns">
         <button class="lrb t${r==='teacher'?' on':''}" onclick="setRole(${i},'teacher')">T</button>
         <button class="lrb s${r==='student'?' on':''}" onclick="setRole(${i},'student')">S</button>
         <button class="lrb sk${r==='skip'?' on':''}" onclick="setRole(${i},'skip')">—</button>
       </div>
-      <div class="lr-text">${esc(text)}</div>
+      <div class="lr-text">${esc(text)}${zhTag}</div>
     </div>`;
   }).join('');
 }
@@ -1182,17 +1280,20 @@ function confirmLineImport(){
   pendingLines.forEach((text,i)=>{
     const r=lineRoles[i];
     if(r==='skip') return;
-    l.exchanges.push({id:uid(),role:r,text,corrections:[]});
+    const ex={id:uid(),role:r,text,corrections:[]};
+    if(pendingZhLines[i]) ex.zh=pendingZhLines[i];
+    l.exchanges.push(ex);
     added++;
   });
+  const hasZh=pendingZhLines.some(z=>z);
   save(); renderSel(); renderDlg(); closeMo('lineRoleMo');
-  toast(`已匯入 ${added} 條對話`);
+  toast(`已匯入 ${added} 條對話${hasZh?' （含中文翻譯）':''}`);
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────────────
 function openMo(id){ document.getElementById(id).classList.add('open'); }
 function closeMo(id){ document.getElementById(id).classList.remove('open'); }
-['newLessonMo','addExMo','corrMo','importMo','autoMo','lineRoleMo','settingsMo','promptGenMo','htmlImportMo','exportGuideMo'].forEach(id=>{
+['newLessonMo','addExMo','corrMo','importMo','autoMo','lineRoleMo','settingsMo','promptGenMo','htmlImportMo','exportGuideMo','translateMo'].forEach(id=>{
   document.getElementById(id).addEventListener('click',e=>{
     if(e.target===document.getElementById(id)) closeMo(id);
   });
@@ -1656,17 +1757,140 @@ function applyAuto(){
   toast(`已套用 ${toApply.length} 個修正`);
 }
 
+// ── AUDIO LANGUAGE ────────────────────────────────────────────────────────
+let audioLang='en';
+function setAudioLang(val){ audioLang=val; }
+
+function getExportItems(){
+  if(exportSel.size>0) return D.practice.filter(x=>exportSel.has(x.id));
+  return D.practice;
+}
+function toggleExportSel(id,checked){
+  if(checked) exportSel.add(id); else exportSel.delete(id);
+  const el=document.getElementById('ti-'+id);
+  if(el) el.classList.toggle('export-sel',checked);
+  updateSelCount();
+}
+function toggleSelectAll(checked){
+  filterItems().forEach(item=>{
+    const cb=document.getElementById('ecb-'+item.id);
+    if(cb) cb.checked=checked;
+    if(checked) exportSel.add(item.id); else exportSel.delete(item.id);
+    const el=document.getElementById('ti-'+item.id);
+    if(el) el.classList.toggle('export-sel',checked);
+  });
+  updateSelCount();
+}
+function updateSelCount(){
+  const el=document.getElementById('exportSelCount');
+  if(el) el.textContent=exportSel.size?`已選 ${exportSel.size} 句`:'（未選則全部匯出）';
+}
+function setExportCtrl(show,msg){
+  const bar=document.getElementById('exportCtrlBar');
+  if(bar) bar.classList.toggle('active',show);
+  if(msg){ const m=document.getElementById('exportCtrlMsg'); if(m) m.textContent=msg; }
+  if(!show){ exportPaused=false; exportStop=false; const pb=document.getElementById('exportPauseBtn'); if(pb) pb.textContent='⏸ 暫停'; }
+}
+function toggleExportPause(){
+  exportPaused=!exportPaused;
+  const btn=document.getElementById('exportPauseBtn');
+  if(btn) btn.textContent=exportPaused?'▶ 繼續':'⏸ 暫停';
+  if(exportPaused){ const m=document.getElementById('exportCtrlMsg'); if(m) m.textContent='已暫停，目前語句唸完後停止...'; }
+}
+function stopExport(){
+  exportStop=true;
+  speechSynthesis.cancel();
+  setExportCtrl(false);
+}
+function waitPausable(ms){
+  return new Promise(res=>{
+    let elapsed=0;
+    const tick=()=>{
+      if(exportStop){ res(); return; }
+      if(exportPaused){ setTimeout(tick,100); return; }
+      elapsed+=100;
+      if(elapsed>=ms){ res(); return; }
+      setTimeout(tick,Math.min(ms-elapsed,100));
+    };
+    setTimeout(tick,100);
+  });
+}
+
+function openTranslateMo(){
+  if(!D.practice.length){ toast('練習清單是空的'); return; }
+  renderTranslateList();
+  openMo('translateMo');
+}
+
+function renderTranslateList(){
+  document.getElementById('translateList').innerHTML=D.practice.map(item=>`
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+      <div style="font-size:.8rem;font-weight:500;margin-bottom:5px;line-height:1.4">${esc(item.text)}</div>
+      <input type="text" class="f-input" style="font-size:.8rem" id="zh-${item.id}"
+        value="${esc(item.zh||'')}" placeholder="輸入中文翻譯…">
+    </div>`).join('');
+}
+
+async function claudeTranslateAll(){
+  const key=localStorage.getItem('esl_claude_key')||'';
+  if(!key){ toast('請先在 ⚙ 設定中輸入 Claude API Key'); return; }
+  const btn=document.getElementById('claudeTransBtn');
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span>翻譯中...';
+  try{
+    const texts=D.practice.map(x=>x.text);
+    const prompt=`請將以下英文句子逐一翻譯成繁體中文。只回傳 JSON 陣列，每個元素是對應的中文翻譯字串，不要任何說明：\n${JSON.stringify(texts)}`;
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':key,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:2048,messages:[{role:'user',content:prompt}]})
+    });
+    if(!res.ok){const e=await res.json();throw new Error(e.error?.message||'HTTP '+res.status);}
+    const data=await res.json();
+    const text=data.content?.[0]?.text||'[]';
+    const m=text.match(/\[[\s\S]*\]/);
+    if(!m) throw new Error('回覆格式不符');
+    const translations=JSON.parse(m[0]);
+    D.practice.forEach((item,i)=>{ if(translations[i]) item.zh=translations[i]; });
+    save(); renderTranslateList(); toast('翻譯完成！');
+  }catch(e){ toast('翻譯失敗：'+e.message); }
+  finally{ btn.disabled=false; btn.innerHTML='🤖 Claude 一鍵翻譯'; }
+}
+
+function saveTransAndExport(){
+  D.practice.forEach(item=>{
+    const el=document.getElementById('zh-'+item.id);
+    if(el) item.zh=el.value.trim();
+  });
+  save(); closeMo('translateMo');
+  openMo('exportGuideMo');
+}
+
+function startCaptureRecording(){
+  if(audioLang==='zh-en') startCaptureExportZhEn();
+  else startCaptureExport();
+}
+
 // ── EXPORT AUDIO ──────────────────────────────────────────────────────────
 async function exportAudio(){
-  const items=D.practice;
+  const items=getExportItems();
   if(!items.length){ toast('清單是空的'); return; }
+
+  // 中文+英文 模式：先開翻譯 modal
+  if(audioLang==='zh-en'){ openTranslateMo(); return; }
+
+  // 英文模式：原有邏輯
   const voice=document.getElementById('voiceSel').value;
   const btn=document.getElementById('exportAudioBtn');
   if(btn){ btn.disabled=true; btn.textContent='嘗試中...'; }
   try{
     if(!await _exportFetch(items,voice,btn)){
       if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
-      openMo('exportGuideMo'); // TTS API 不可用 → 引導錄製模式
+      openMo('exportGuideMo');
     }
   }catch(e){
     if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
@@ -1704,7 +1928,8 @@ async function _exportFetch(items,voice,btn){
 }
 
 async function startCaptureExport(){
-  const items=D.practice;
+  const items=getExportItems();
+  exportStop=false; exportPaused=false;
   closeMo('exportGuideMo');
   const btn=document.getElementById('exportAudioBtn');
   if(btn){ btn.disabled=true; btn.textContent='等待授權...'; }
@@ -1741,10 +1966,12 @@ async function startCaptureExport(){
   });
   const engVoice=voices.find(v=>v.lang==='en-US')||voices.find(v=>v.lang.startsWith('en'));
 
+  setExportCtrl(true,'準備中...');
   let ok=0;
   for(let i=0;i<items.length;i++){
+    if(exportStop) break;
+    setExportCtrl(true,`第 ${i+1}/${items.length} 句...`);
     if(btn) btn.textContent=`第 ${i+1}/${items.length} 句...`;
-    toast(`播放第 ${i+1}/${items.length} 句`);
     await new Promise(res=>{
       speechSynthesis.cancel();
       const u=new SpeechSynthesisUtterance(items[i].text);
@@ -1754,9 +1981,11 @@ async function startCaptureExport(){
       u.onerror=()=>res();
       speechSynthesis.speak(u);
     });
-    if(i<items.length-1) await new Promise(r=>setTimeout(r,3000));
+    if(exportStop) break;
+    if(i<items.length-1) await waitPausable(3000);
   }
 
+  setExportCtrl(false);
   await new Promise(r=>setTimeout(r,600));
   rec.stop();
   await new Promise(r=>{ rec.onstop=r; });
@@ -1767,7 +1996,96 @@ async function startCaptureExport(){
   const blob=new Blob(chunks,{type:mime||'audio/webm'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='ESL練習音檔.webm'; a.click();
-  toast(`匯出完成（${ok}/${items.length} 句，間隔 3 秒）`);
+  toast(exportStop?`已停止（${ok}/${items.length} 句完成）`:`匯出完成（${ok}/${items.length} 句，間隔 3 秒）`);
+}
+
+async function startCaptureExportZhEn(){
+  const items=getExportItems();
+  exportStop=false; exportPaused=false;
+  closeMo('exportGuideMo');
+  const btn=document.getElementById('exportAudioBtn');
+  if(btn){ btn.disabled=true; btn.textContent='等待授權...'; }
+
+  let stream;
+  try{
+    stream=await navigator.mediaDevices.getDisplayMedia({video:{width:1,height:1},audio:true});
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
+    toast(e.name==='NotAllowedError'?'已取消錄製':'授權失敗：'+e.message);
+    return;
+  }
+  stream.getVideoTracks().forEach(t=>t.stop());
+  if(!stream.getAudioTracks().length){
+    stream.getTracks().forEach(t=>t.stop());
+    if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
+    toast('❌ 沒有音訊！請按說明勾選「共用系統音訊」後重試');
+    return;
+  }
+
+  const mime=['audio/webm;codecs=opus','audio/webm','audio/ogg'].find(t=>MediaRecorder.isTypeSupported(t))||'';
+  const rec=new MediaRecorder(stream,mime?{mimeType:mime}:{});
+  const chunks=[]; rec.ondataavailable=e=>{ if(e.data.size>0) chunks.push(e.data); };
+  rec.start();
+  await new Promise(r=>setTimeout(r,600));
+
+  let voices=speechSynthesis.getVoices();
+  if(!voices.length) voices=await new Promise(res=>{
+    speechSynthesis.onvoiceschanged=()=>res(speechSynthesis.getVoices());
+    setTimeout(()=>res(speechSynthesis.getVoices()),1200);
+  });
+  const engVoice=voices.find(v=>v.lang==='en-US')||voices.find(v=>v.lang.startsWith('en'));
+  const zhVoice=voices.find(v=>v.lang==='zh-TW')||voices.find(v=>v.lang==='zh-HK')||voices.find(v=>v.lang.startsWith('zh'));
+
+  const speakPromise=(text,lang,voice)=>new Promise(res=>{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang=lang; u.rate=Math.min(rate,1.0);
+    if(voice) u.voice=voice;
+    u.onend=()=>res(); u.onerror=()=>res();
+    speechSynthesis.speak(u);
+  });
+
+  setExportCtrl(true,'準備中...');
+  let ok=0;
+  for(let i=0;i<items.length;i++){
+    if(exportStop) break;
+    setExportCtrl(true,`第 ${i+1}/${items.length} 句...`);
+    if(btn) btn.textContent=`第 ${i+1}/${items.length} 句...`;
+
+    // 英文
+    await new Promise(res=>{
+      speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(items[i].text);
+      u.lang='en-US'; u.rate=rate;
+      if(engVoice) u.voice=engVoice;
+      u.onend=()=>{ ok++; res(); }; u.onerror=()=>res();
+      speechSynthesis.speak(u);
+    });
+    if(exportStop) break;
+
+    // 中文（有翻譯才播）
+    if(items[i].zh){
+      await waitPausable(700);
+      if(exportStop) break;
+      await speakPromise(items[i].zh,'zh-TW',zhVoice);
+      if(exportStop) break;
+    }
+
+    if(i<items.length-1) await waitPausable(3000);
+  }
+
+  setExportCtrl(false);
+  await new Promise(r=>setTimeout(r,600));
+  rec.stop();
+  await new Promise(r=>{ rec.onstop=r; });
+  stream.getTracks().forEach(t=>t.stop());
+  if(btn){ btn.disabled=false; btn.textContent='🎵 匯出音檔'; }
+
+  if(!chunks.length){ toast('❌ 未錄到資料，請確認授權時已勾選音訊選項'); return; }
+  const blob=new Blob(chunks,{type:mime||'audio/webm'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='ESL練習音檔_中英.webm'; a.click();
+  toast(exportStop?`已停止（${ok}/${items.length} 句完成）`:`匯出完成（${ok}/${items.length} 句，中文＋英文，間隔 3 秒）`);
 }
 
 function encodeWAV(buf){
