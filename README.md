@@ -32,6 +32,7 @@
 | 🌐 中英雙語音檔 | 匯出音檔前可切換「英文」或「英文→中文→英文（加強記憶）」語音，每句先播英文、間隔後播中文，再重複播一次英文加深印象，下載雙語練習音檔 |
 | ☑ 批次選取管理 | 練習清單與對話紀錄皆可勾選多筆，指定範圍匯出或一次批次刪除 |
 | ⏸ 匯出可暫停 | 錄製匯出音檔時可暫停／繼續／停止，並即時顯示目前錄到第幾句 |
+| ☁ Google Drive 雲端備份 | 用自己的 Google 帳號登入，把所有課堂紀錄與練習清單存成一個 JSON 檔到自己的 Drive；換裝置或清除瀏覽器資料後可登入讀回 |
 
 ---
 
@@ -161,15 +162,39 @@ The patient has a serious disease, so ~~they will die quickly~~ they may not rec
 - **語法分析：** LanguageTool 免費 API（🤖 自動修正功能）
 - **AI 修正：** Anthropic Claude API（選用，需自備 API Key）
 - **資料儲存：** localStorage（所有課堂紀錄存於本機瀏覽器）
+- **雲端備份：** Google Identity Services（OAuth）+ Google Drive API v3（`drive.file` 範圍，僅能存取本工具自己建立的檔案）
 - **HTML 解析：** DOMParser 解析 Claude HTML 輸出
 
 ---
 
 ## 資料說明
 
-- 所有課堂紀錄儲存於**本機瀏覽器 localStorage**，換裝置不會同步
-- 清除瀏覽器快取將**永久刪除**所有紀錄，建議定期點「匯出」備份
-- Claude API Key 僅儲存於本機，不會傳送至任何第三方伺服器
+- 所有課堂紀錄預設儲存於**本機瀏覽器 localStorage**，換裝置不會自動同步
+- 清除瀏覽器快取將**永久刪除**所有紀錄，建議定期點「匯出」備份，或使用下方「☁ Google Drive 雲端備份」
+- Claude API Key、Google OAuth Client ID 僅儲存於本機，不會傳送至任何第三方伺服器
+
+---
+
+## ☁ Google Drive 雲端備份
+
+把所有課堂紀錄與練習清單備份到你自己的 Google Drive，換電腦或清除瀏覽器資料後，登入 Google 帳號就能讀回。
+
+### 首次設定（僅需一次）
+
+1. 點頂部「**☁ 雲端備份**」→「**📖 設定教學**」，依步驟到 [Google Cloud Console](https://console.cloud.google.com/) 建立一個 OAuth 用戶端 ID（應用程式類型選「網頁應用程式」，並把本工具網址加入「已授權的 JavaScript 來源」）
+2. 複製建立好的 Client ID（結尾是 `.apps.googleusercontent.com`）
+3. 到「**⚙ 設定**」貼上並儲存
+
+### 日常使用
+
+| 操作 | 說明 |
+|------|------|
+| 🔑 登入 Google | 授權本工具存取 Drive（只能讀寫它自己建立的檔案，看不到你 Drive 裡其他檔案） |
+| ⬆ 存到雲端 | 把目前所有課堂紀錄、練習清單打包成 `esl-transcript-backup.json`，存到你的 Drive |
+| ⬇ 從雲端讀取 | 下載雲端備份並**覆蓋**本機目前資料（讀取前會再次確認，避免誤觸） |
+| 登出 | 結束這次瀏覽器的登入狀態 |
+
+> 因應用程式未經 Google 正式審核（測試模式），每 7 天需要重新登入一次，屬正常現象，不影響已存的雲端資料。
 
 ---
 

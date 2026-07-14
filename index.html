@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ESL 課堂對話紀錄與修正</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -231,6 +232,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
     <button class="btn btn-ghost btn-sm" onclick="openNewLesson()">＋ 新增課堂</button>
     <button class="btn btn-ghost btn-sm" onclick="openImport()">貼上逐字稿</button>
     <button class="btn btn-primary btn-sm" onclick="openHTMLImport()">📥 Claude HTML 匯入</button>
+    <button class="btn btn-ghost btn-sm" onclick="openGDrive()">☁ 雲端備份</button>
   </div>
 </header>
 
@@ -497,9 +499,78 @@ Winnie: Yes, my aunt. they control the cancer as well."></textarea>
         · 有 Key 才能直接從工具呼叫 AI；無 Key 則使用提示詞複製模式
       </div>
     </div>
+    <div class="divider"></div>
+    <div class="f-field">
+      <label class="f-label">Google OAuth Client ID（選填，用於☁ 雲端備份）</label>
+      <input type="text" class="f-input" id="gdriveClientIdInput" placeholder="xxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com">
+      <div style="font-size:.7rem;color:var(--muted);margin-top:6px">
+        需自行到 Google Cloud Console 建立，步驟見「☁ 雲端備份」視窗中的教學 · 只用來讀寫本工具自己建立的檔案，不會存取你 Drive 裡其他檔案
+      </div>
+    </div>
     <div class="f-actions">
       <button class="btn btn-ghost" onclick="closeMo('settingsMo')">取消</button>
       <button class="btn btn-primary" onclick="saveSettings()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Google Drive Backup -->
+<div class="modal-overlay" id="gdriveMo">
+  <div class="modal">
+    <div class="modal-title">☁ Google Drive 雲端備份</div>
+    <div class="modal-sub">將所有課堂紀錄與練習清單備份到你自己的 Google Drive，換裝置或清除快取後可還原</div>
+
+    <div id="gdriveNoClient" style="display:none;background:#fff4e5;border:1px solid #f5c26b;border-radius:8px;padding:11px 13px;font-size:.78rem;line-height:1.7;margin-bottom:14px">
+      ⚠️ 尚未設定 Google OAuth Client ID，請先點下方「設定教學」了解如何取得，再到 <strong>⚙ 設定</strong> 貼上。
+    </div>
+
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:.8rem;line-height:1.9">
+      <div>連線狀態：<span id="gdriveStatus" style="font-weight:600">未連結</span></div>
+      <div id="gdriveEmailRow" style="display:none">Google 帳號：<span id="gdriveEmail"></span></div>
+      <div id="gdriveSyncRow" style="display:none">上次同步：<span id="gdriveSyncTime">—</span></div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn-primary btn-sm" id="gdriveConnectBtn" onclick="gdriveConnect()">🔑 登入 Google</button>
+      <button class="btn btn-green btn-sm" id="gdriveSaveBtn" onclick="gdriveSave()" style="display:none">⬆ 存到雲端</button>
+      <button class="btn btn-ghost btn-sm" id="gdriveLoadBtn" onclick="gdriveLoad()" style="display:none">⬇ 從雲端讀取</button>
+      <button class="btn btn-ghost btn-sm" id="gdriveDisconnectBtn" onclick="gdriveDisconnect()" style="display:none">登出</button>
+    </div>
+
+    <div style="font-size:.7rem;color:var(--muted);line-height:1.6;margin-bottom:6px">
+      💡 「從雲端讀取」會用雲端備份覆蓋本機目前的所有課堂紀錄與練習清單，讀取前會再次確認。<br>
+      💡 每台裝置／每次清除瀏覽器資料後，開啟本頁需重新按「登入 Google」一次，才能存取雲端備份。
+    </div>
+
+    <div class="f-actions">
+      <button class="btn btn-ghost btn-sm" onclick="openGDriveHelp()">📖 設定教學</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost" onclick="closeMo('gdriveMo')">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Google Drive Setup Help -->
+<div class="modal-overlay" id="gdriveHelpMo">
+  <div class="modal">
+    <div class="modal-title">📖 Google OAuth Client ID 設定教學</div>
+    <div class="modal-sub">只需設定一次，之後所有裝置都能用同一組 Client ID 登入</div>
+    <div style="font-size:.8rem;line-height:1.95">
+      <ol style="padding-left:20px;display:flex;flex-direction:column;gap:10px">
+        <li>開啟 <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent)">Google Cloud Console</a>，建立（或選擇）一個專案</li>
+        <li>左側選單「API 和服務」→「已啟用的 API 和服務」→ 搜尋並啟用「<strong>Google Drive API</strong>」</li>
+        <li>「API 和服務」→「OAuth 同意畫面」：使用者類型選「<strong>外部</strong>」，填基本資料後儲存；在「測試使用者」加入你自己的 Gmail 帳號</li>
+        <li>「API 和服務」→「憑證」→「建立憑證」→「<strong>OAuth 用戶端 ID</strong>」，應用程式類型選「<strong>網頁應用程式</strong>」</li>
+        <li>「已授權的 JavaScript 來源」新增本工具的網址（例如 <code>https://winnieshih1107.github.io</code>）</li>
+        <li>建立完成後複製 Client ID（一長串英數字，結尾是 <code>.apps.googleusercontent.com</code>）</li>
+        <li>回到本工具「⚙ 設定」貼上並儲存，即可在「☁ 雲端備份」登入使用</li>
+      </ol>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:14px;font-size:.74rem;color:var(--muted);line-height:1.7">
+        ⚠️ 因應用程式未經 Google 正式審核（測試模式），每 7 天需要重新登入一次 Google 帳號授權，屬正常現象，不影響已存的雲端資料。
+      </div>
+    </div>
+    <div class="f-actions">
+      <button class="btn btn-primary" onclick="closeMo('gdriveHelpMo')">我知道了</button>
     </div>
   </div>
 </div>
@@ -1293,7 +1364,7 @@ function confirmLineImport(){
 // ── MODAL ─────────────────────────────────────────────────────────────────
 function openMo(id){ document.getElementById(id).classList.add('open'); }
 function closeMo(id){ document.getElementById(id).classList.remove('open'); }
-['newLessonMo','addExMo','corrMo','importMo','autoMo','lineRoleMo','settingsMo','promptGenMo','htmlImportMo','exportGuideMo','translateMo'].forEach(id=>{
+['newLessonMo','addExMo','corrMo','importMo','autoMo','lineRoleMo','settingsMo','promptGenMo','htmlImportMo','exportGuideMo','translateMo','gdriveMo','gdriveHelpMo'].forEach(id=>{
   document.getElementById(id).addEventListener('click',e=>{
     if(e.target===document.getElementById(id)) closeMo(id);
   });
@@ -1542,14 +1613,20 @@ function parseClaudeHTML(htmlStr){
 // ── SETTINGS ─────────────────────────────────────────────────────────────
 function openSettings(){
   document.getElementById('apiKeyInput').value=localStorage.getItem('esl_claude_key')||'';
+  document.getElementById('gdriveClientIdInput').value=getGDriveClientId();
   openMo('settingsMo');
 }
 function saveSettings(){
   const k=document.getElementById('apiKeyInput').value.trim();
   if(k) localStorage.setItem('esl_claude_key',k);
   else localStorage.removeItem('esl_claude_key');
+
+  const gid=document.getElementById('gdriveClientIdInput').value.trim();
+  if(gid) localStorage.setItem('esl_gdrive_client_id',gid);
+  else localStorage.removeItem('esl_gdrive_client_id');
+
   closeMo('settingsMo');
-  toast(k?'API Key 已儲存':'API Key 已清除');
+  toast('設定已儲存');
 }
 
 // ── AI BATCH CORRECT ──────────────────────────────────────────────────────
@@ -2107,6 +2184,179 @@ function encodeWAV(buf){
     v.setInt16(o,s<0?s*32768:s*32767,true); o+=2;
   }
   return new Blob([ab],{type:'audio/wav'});
+}
+
+// ── GOOGLE DRIVE BACKUP ──────────────────────────────────────────────────
+const GDRIVE_FILENAME='esl-transcript-backup.json';
+const GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+let gdriveTokenClient=null, gdriveAccessToken=null, gdriveUserEmail='';
+
+function getGDriveClientId(){ return localStorage.getItem('esl_gdrive_client_id')||''; }
+function getGDriveFileId(){ return localStorage.getItem('esl_gdrive_file_id')||''; }
+function setGDriveFileId(id){ if(id) localStorage.setItem('esl_gdrive_file_id',id); }
+function getGDriveSyncTime(){ return localStorage.getItem('esl_gdrive_sync_time')||''; }
+function setGDriveSyncTime(t){ localStorage.setItem('esl_gdrive_sync_time',t); }
+
+function openGDrive(){
+  document.getElementById('gdriveNoClient').style.display=getGDriveClientId()?'none':'block';
+  refreshGDriveUI();
+  openMo('gdriveMo');
+}
+function openGDriveHelp(){ openMo('gdriveHelpMo'); }
+
+function ensureGDriveTokenClient(){
+  const clientId=getGDriveClientId();
+  if(!clientId){ toast('請先在 ⚙ 設定輸入 Google OAuth Client ID'); return null; }
+  if(typeof google==='undefined'||!google.accounts||!google.accounts.oauth2){
+    toast('Google 登入元件尚未載入，請稍後再試'); return null;
+  }
+  if(!gdriveTokenClient||gdriveTokenClient._cid!==clientId){
+    gdriveTokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:clientId,
+      scope:GDRIVE_SCOPE,
+      callback:(resp)=>{
+        if(resp.error){ toast('Google 登入失敗：'+resp.error); return; }
+        gdriveAccessToken=resp.access_token;
+        fetchGDriveUserInfo();
+      }
+    });
+    gdriveTokenClient._cid=clientId;
+  }
+  return gdriveTokenClient;
+}
+
+function gdriveConnect(){
+  const tc=ensureGDriveTokenClient();
+  if(!tc) return;
+  tc.requestAccessToken({prompt:'consent'});
+}
+
+function gdriveDisconnect(){
+  if(gdriveAccessToken&&window.google?.accounts?.oauth2?.revoke){
+    google.accounts.oauth2.revoke(gdriveAccessToken,()=>{});
+  }
+  gdriveAccessToken=null; gdriveUserEmail='';
+  refreshGDriveUI();
+  toast('已登出 Google');
+}
+
+async function fetchGDriveUserInfo(){
+  try{
+    const res=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{
+      headers:{Authorization:'Bearer '+gdriveAccessToken}
+    });
+    if(res.ok){ const info=await res.json(); gdriveUserEmail=info.email||''; }
+  }catch(e){}
+  refreshGDriveUI();
+  toast('✅ 已連結 Google Drive');
+}
+
+function refreshGDriveUI(){
+  const connected=!!gdriveAccessToken;
+  const statusEl=document.getElementById('gdriveStatus');
+  if(statusEl) statusEl.textContent=connected?'已連結':'未連結';
+  const emailRow=document.getElementById('gdriveEmailRow');
+  if(emailRow) emailRow.style.display=(connected&&gdriveUserEmail)?'block':'none';
+  const emailEl=document.getElementById('gdriveEmail');
+  if(emailEl) emailEl.textContent=gdriveUserEmail;
+  const syncTime=getGDriveSyncTime();
+  const syncRow=document.getElementById('gdriveSyncRow');
+  if(syncRow) syncRow.style.display=syncTime?'block':'none';
+  const syncEl=document.getElementById('gdriveSyncTime');
+  if(syncEl) syncEl.textContent=syncTime;
+
+  const cb=document.getElementById('gdriveConnectBtn'), sb=document.getElementById('gdriveSaveBtn'),
+        lb=document.getElementById('gdriveLoadBtn'), db=document.getElementById('gdriveDisconnectBtn');
+  if(cb) cb.style.display=connected?'none':'inline-flex';
+  if(sb) sb.style.display=connected?'inline-flex':'none';
+  if(lb) lb.style.display=connected?'inline-flex':'none';
+  if(db) db.style.display=connected?'inline-flex':'none';
+}
+
+function handleGDriveAuthError(e){
+  if(String(e.message||'').includes('過期')||String(e.message||'').includes('401')){
+    gdriveAccessToken=null; refreshGDriveUI();
+  }
+}
+
+async function gdriveApiFetch(url,opts={}){
+  if(!gdriveAccessToken) throw new Error('尚未登入 Google');
+  opts.headers=Object.assign({},opts.headers,{Authorization:'Bearer '+gdriveAccessToken});
+  const res=await fetch(url,opts);
+  if(res.status===401) throw new Error('登入已過期（401），請重新登入 Google');
+  return res;
+}
+
+async function gdriveFindFile(){
+  const q=`name='${GDRIVE_FILENAME}' and trashed=false`;
+  const res=await gdriveApiFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,modifiedTime)&spaces=drive`);
+  if(!res.ok) throw new Error('搜尋雲端檔案失敗（HTTP '+res.status+'）');
+  const data=await res.json();
+  return (data.files&&data.files[0])||null;
+}
+
+async function gdriveSave(){
+  const btn=document.getElementById('gdriveSaveBtn');
+  if(btn){ btn.disabled=true; btn.textContent='存檔中...'; }
+  try{
+    let fileId=getGDriveFileId();
+    if(!fileId){ const existing=await gdriveFindFile(); if(existing) fileId=existing.id; }
+    const content=JSON.stringify(D);
+    let res;
+    if(fileId){
+      res=await gdriveApiFetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:content
+      });
+    } else {
+      const metadata={name:GDRIVE_FILENAME,mimeType:'application/json'};
+      const boundary='-------esl'+Math.random().toString(36).slice(2);
+      const body=`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`+
+                 `--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
+      res=await gdriveApiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+        method:'POST',
+        headers:{'Content-Type':`multipart/related; boundary=${boundary}`},
+        body
+      });
+    }
+    if(!res.ok){ const t=await res.text(); throw new Error('HTTP '+res.status+' '+t.slice(0,120)); }
+    const saved=await res.json();
+    setGDriveFileId(saved.id);
+    setGDriveSyncTime(new Date().toLocaleString('zh-TW'));
+    refreshGDriveUI();
+    toast('✅ 已存到 Google Drive');
+  }catch(e){
+    console.error(e); handleGDriveAuthError(e); toast('存檔失敗：'+e.message);
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='⬆ 存到雲端'; }
+  }
+}
+
+async function gdriveLoad(){
+  if(!confirm('從雲端讀取會覆蓋本機目前所有課堂紀錄與練習清單，確定要繼續嗎？')) return;
+  const btn=document.getElementById('gdriveLoadBtn');
+  if(btn){ btn.disabled=true; btn.textContent='讀取中...'; }
+  try{
+    let fileId=getGDriveFileId();
+    if(!fileId){
+      const existing=await gdriveFindFile();
+      if(!existing){ toast('雲端尚無備份檔，請先按「存到雲端」'); return; }
+      fileId=existing.id; setGDriveFileId(fileId);
+    }
+    const res=await gdriveApiFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    D=Object.assign({lessons:[],activeId:null,practice:[],plays:0},data);
+    save(); renderSel(); renderDlg(); renderPractice();
+    setGDriveSyncTime(new Date().toLocaleString('zh-TW'));
+    refreshGDriveUI();
+    toast('✅ 已從雲端讀取資料');
+  }catch(e){
+    console.error(e); handleGDriveAuthError(e); toast('讀取失敗：'+e.message);
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='⬇ 從雲端讀取'; }
+  }
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
