@@ -287,7 +287,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
               <input type="radio" name="audioLang" value="en" checked onchange="setAudioLang(this.value)"> 英文
             </label>
             <label style="cursor:pointer;display:flex;align-items:center;gap:4px">
-              <input type="radio" name="audioLang" value="zh-en" onchange="setAudioLang(this.value)"> 中文＋英文
+              <input type="radio" name="audioLang" value="zh-en" onchange="setAudioLang(this.value)"> 英文→中文→英文（加強記憶）
             </label>
           </div>
         </div>
@@ -2052,7 +2052,7 @@ async function startCaptureExportZhEn(){
     setExportCtrl(true,`第 ${i+1}/${items.length} 句...`);
     if(btn) btn.textContent=`第 ${i+1}/${items.length} 句...`;
 
-    // 英文
+    // 英文（第一遍）
     await new Promise(res=>{
       speechSynthesis.cancel();
       const u=new SpeechSynthesisUtterance(items[i].text);
@@ -2063,11 +2063,16 @@ async function startCaptureExportZhEn(){
     });
     if(exportStop) break;
 
-    // 中文（有翻譯才播）
+    // 中文（有翻譯才播，並在中文後重複一次英文加強印象）
     if(items[i].zh){
       await waitPausable(700);
       if(exportStop) break;
       await speakPromise(items[i].zh,'zh-TW',zhVoice);
+      if(exportStop) break;
+
+      await waitPausable(700);
+      if(exportStop) break;
+      await speakPromise(items[i].text,'en-US',engVoice);
       if(exportStop) break;
     }
 
@@ -2085,7 +2090,7 @@ async function startCaptureExportZhEn(){
   const blob=new Blob(chunks,{type:mime||'audio/webm'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='ESL練習音檔_中英.webm'; a.click();
-  toast(exportStop?`已停止（${ok}/${items.length} 句完成）`:`匯出完成（${ok}/${items.length} 句，中文＋英文，間隔 3 秒）`);
+  toast(exportStop?`已停止（${ok}/${items.length} 句完成）`:`匯出完成（${ok}/${items.length} 句，英文→中文→英文，間隔 3 秒）`);
 }
 
 function encodeWAV(buf){
