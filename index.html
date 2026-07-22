@@ -668,9 +668,11 @@ Winnie: Yes, my aunt. they control the cancer as well."></textarea>
   <div class="modal">
     <div class="modal-title">🇹🇼 中文翻譯</div>
     <div class="modal-sub">匯出時每句先播中文再播英文；可手動輸入或用 Claude 一鍵翻譯</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
       <button class="btn btn-auto btn-sm" id="claudeTransBtn" onclick="claudeTranslateAll()">🤖 Claude 一鍵翻譯</button>
       <span style="font-size:.7rem;color:var(--muted)">需 API Key（⚙ 設定）</span>
+      <button class="btn btn-ghost btn-sm" onclick="autoSplitZh()">🔍 自動分離句中中文</button>
+      <span style="font-size:.7rem;color:var(--muted)">句子若已含中文（如「Let me think. 我想想」），一鍵拆到左方欄位</span>
     </div>
     <div id="translateList" style="display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto;margin-bottom:12px"></div>
     <div class="f-actions">
@@ -1906,6 +1908,21 @@ function renderTranslateList(){
       <input type="text" class="f-input" style="font-size:.8rem" id="zh-${item.id}"
         value="${esc(item.zh||'')}" placeholder="輸入中文翻譯…">
     </div>`).join('');
+}
+
+function autoSplitZh(){
+  let n=0;
+  D.practice.forEach(item=>{
+    if(item.zh) return;
+    const m=item.text.match(/^([\s\S]*?)([一-鿿][\s\S]*)$/);
+    if(m && m[1].trim() && m[2].trim()){
+      item.text=m[1].trim();
+      item.zh=m[2].trim();
+      n++;
+    }
+  });
+  if(n){ save(); renderTranslateList(); renderPractice(); }
+  toast(n?`已自動分離 ${n} 句`:'沒有偵測到句中含中文的未翻譯句子');
 }
 
 async function claudeTranslateAll(){
